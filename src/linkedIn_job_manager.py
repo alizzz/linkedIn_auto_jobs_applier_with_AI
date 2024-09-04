@@ -70,7 +70,7 @@ class LinkedInJobManager:
         searches = list(product(self.positions, self.locations))
         random.shuffle(searches)
         page_sleep = 0
-        minimum_time = 60 * 15
+        minimum_time = 60 * 5
         minimum_page_time = time.time() + minimum_time
 
         for position, location in searches:
@@ -84,6 +84,7 @@ class LinkedInJobManager:
                     job_page_number += 1
                     utils.printyellow(f"Going to job page {job_page_number}")
                     self.next_job_page(position, location_url, job_page_number)
+                    utils.printyellow(f"position: {position}, location_url: {location_url}")
                     time.sleep(random.uniform(1.5, 3.5))
                     utils.printyellow("Starting the application process for this page...")
                     self.apply_jobs()
@@ -116,7 +117,12 @@ class LinkedInJobManager:
     def apply_jobs(self):
         try:
             no_jobs_element = self.driver.find_element(By.CLASS_NAME, 'jobs-search-two-pane__no-results-banner--expand')
-            if 'No matching jobs found' in no_jobs_element.text or 'unfortunately, things aren' in self.driver.page_source.lower():
+            utils.printyellow(f"no_jobs_element: {no_jobs_element}")
+            if 'No matching jobs found' in no_jobs_element.text:
+                print("No matching jobs found")
+                raise Exception("No more jobs on this page")
+            if 'unfortunately, things aren' in self.driver.page_source.lower():
+                print("unfortunately, things aren")
                 raise Exception("No more jobs on this page")
         except NoSuchElementException:
             pass
@@ -125,10 +131,15 @@ class LinkedInJobManager:
         utils.scroll_slow(self.driver, job_results)
         utils.scroll_slow(self.driver, job_results, step=300, reverse=True)
         job_list_elements = self.driver.find_elements(By.CLASS_NAME, 'scaffold-layout__list-container')[0].find_elements(By.CLASS_NAME, 'jobs-search-results__list-item')
+        utils.printyellow(f"job_list_elements: {job_list_elements}")
         if not job_list_elements:
+            print("No job class elements found on page")
             raise Exception("No job class elements found on page")
-        job_list = [Job(*self.extract_job_information_from_tile(job_element)) for job_element in job_list_elements] 
+        job_list = [Job(*self.extract_job_information_from_tile(job_element)) for job_element in job_list_elements]
+        utils.printyellow(f"job_list: {job_list}")
+
         for job in job_list:
+            utils.printyellow(f"Processing job title: {job.title}, company: {job.company} apply_method: {job.apply_method}")
             if self.is_blacklisted(job.title, job.company, job.link):
                 utils.printyellow(f"Blacklisted {job.title} at {job.company}, skipping...")
                 self.write_to_file(job, "skipped")
@@ -154,7 +165,9 @@ class LinkedInJobManager:
             "pdf_path": pdf_path
         }
         file_path = self.output_file_directory / f"{file_name}.json"
+        utils.printyellow(f"Writing to file: path: {pdf_path}; title: {job.title}; company: {job.company}")
         if not file_path.exists():
+            utils.printyellow(f"file_path {file_path} doesn't exist, creating")
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump([data], f, indent=4)
         else:
@@ -162,6 +175,7 @@ class LinkedInJobManager:
                 try:
                     existing_data = json.load(f)
                 except json.JSONDecodeError:
+                    utils.printyellow(f"unable to decode json")
                     existing_data = []
                 existing_data.append(data)
                 f.seek(0)
@@ -208,7 +222,7 @@ class LinkedInJobManager:
         try:
             apply_method = job_tile.find_element(By.CLASS_NAME, 'job-card-container__apply-method').text
         except:
-            apply_method = "Applied"
+            apply_method = "ApplyMethodNotFound"
 
         return job_title, company, job_location, link, apply_method
     
