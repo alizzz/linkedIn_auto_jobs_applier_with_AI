@@ -1,4 +1,4 @@
-remote: true
+remote: false
 
 experienceLevel:
  internship: false
@@ -24,12 +24,10 @@ date:
  24 hours: true
 
 positions:
-  - Manager Software
-  - Manager AI
+  - Project Manager
 
 locations:
-  - Boston
-  - Seattle
+  - Chicago, IL
 
 distance: 100
 
@@ -39,5 +37,6 @@ companyBlacklist:
   - Nvidia
   - Microsoft
   - Meta
+  - Netflix
 
 titleBlacklist:

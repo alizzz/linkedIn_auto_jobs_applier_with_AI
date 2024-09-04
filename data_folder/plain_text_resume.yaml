@@ -6,7 +6,7 @@ personal_information:
   city: "Burlington, MA"
   address: "63 Mountain Rd"
   phone_prefix: "+1"
-  phone: "6468670808"
+  phone: "(646) 867-0808"
   email: "***REMOVED***"
   github:
   linkedin: "https://www.linkedin.com/in/alexander-l-0a0758326/"
@@ -49,8 +49,8 @@ experience_details:
     location: "Mountain View, CA"
     industry: "Online advertising and Search"
     key_responsibilities:
-      - responsibility_1: "Collaborated with marketing and product teams to build a clear vision for a data-driven customer segmentation project. Communicated the strategy internally and externally, aligning feedback, performance reviews, and resource allocation with the company's broader goals. The successful implementation of the project resulted in a 12.5% improvement in customer targeting accuracy and a 3.6% increase in customer retention."
-      - responsibility_2: "Mentored and coached a team of data scientists to enhance their technical proficiency and foster a culture of continuous self-development. Encouraged research initiatives and “stretch” projects to explore innovative data analysis techniques. The team's professional growth led to a 40% increase in data-driven insights, driving strategic decision-making across the organization"
+      - responsibility_1: "Collaborated with marketing and product teams to build a clear vision for a data-driven customer segmentation project. Communicated the strategy internally and externally, aligning feedback, performance reviews, and resource allocation with the company broader goals. The successful implementation of the project resulted in a 12.5% improvement in customer targeting accuracy and a 3.6% increase in customer retention."
+      - responsibility_2: "Mentored and coached a team of data scientists to enhance their technical proficiency and foster a culture of continuous self-development. Encouraged research initiatives and stretch projects to explore innovative data analysis techniques. The team professional growth led to a 40% increase in data-driven insights, driving strategic decision-making across the organization"
       - responsibility_3: "Developed multiple software components including MQTT packet analysis library, Falco adapter, and RML monitor in Prolog"
     skills_acquired:
       - "Team Management"
@@ -69,13 +69,13 @@ experience_details:
     location: "Mountain View, CA"
     industry: "Data Science"
     key_responsibilities:
-      - responsibility_1: "Developed and integrated customer segementation for search relevancy"
-      - responsibility_2:  "Developed and maintained a critical software tools for recomendation engine"
+      - responsibility_1: "Developed and integrated customer segmentation for search relevancy"
+      - responsibility_2:  "Developed and maintained a critical software tools for recommendation engine"
       - responsibility_3:  "Played an integral role in the development team"
     skills_acquired:
       - "Search engine"
       - "Software development"
-      - "Recomendation engine"
+      - "Recommender Systems"
       - "Customer segmentation"
       - "Negotiations"
       - "Data Analysis"
@@ -150,10 +150,10 @@ interests:
   - "Cloud Technologies"
 
 availability:
-  notice_period: "immediately"
+  notice_period: "2 weeks"
 
 salary_expectations:
-  salary_range_usd: "Flexible"
+  salary_range_usd:
 
 self_identification:
   gender: "Male"
@@ -174,8 +174,8 @@ legal_authorization:
 
 work_preferences:
   remote_work: "Yes"
-  in_person_work: "No"
-  open_to_relocation: "No"
+  in_person_work: "Yes"
+  open_to_relocation: "Yes"
   willing_to_complete_assessments: "Yes"
   willing_to_undergo_drug_tests: "Yes"
   willing_to_undergo_background_checks: "Yes"

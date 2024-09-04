@@ -1,6 +1,7 @@
 personal_information:
   name: "Liam"
   surname: "Murphy"
+  name_suffix: ""
   date_of_birth: "15/08/1995"
   country: "Ireland"
   city: "Galway"
