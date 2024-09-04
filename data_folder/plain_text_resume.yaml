@@ -26,13 +26,13 @@ education_details:
     exam:
 
 experience_details:
-  - position: "Co-Founder & ML Engineering Manager"
+  - position: "AIML Engineering Manager"
     company: "HyperC"
-    employment_period: "04/2023 - Present"
-    location: "Boston, MA"
+    employment_period: "06/2023 - Present"
+    location: "San Francisco Bay, CA"
     industry: "AI ML"
     key_responsibilities:
-      - responsibility_1: "Co-founded and led a startup specializing in AI developemnt for e-commerce and logistics industry and software development with a focus on data science, AI, and ML Engineering"
+      - responsibility_1: "Led an engineering for a startup specializing in AI developemnt for e-commerce and logistics industry and software development with a focus on data science, AI, and ML Engineering"
       - responsibility_2: "Provided ML Engineering consultations for 10+ companies, enhancing their software capabilities with secure, decentralized solutions"
       - responsibility_3: "Developed ML Platform, integrated cutting-edge technology to meet client needs and drive industry innovation"
     skills_acquired:
@@ -65,7 +65,7 @@ experience_details:
 
   - position: "Co-founder and Data Science Software Engineer"
     company: "Tensorsoft"
-    employment_period: "05/2018 - 12/2021"
+    employment_period: "03/2016 - 12/2021"
     location: "Mountain View, CA"
     industry: "Data Science"
     key_responsibilities:
@@ -81,29 +81,13 @@ experience_details:
       - "Data Analysis"
       - "Statistics"
 
-  - position: "Director of Data Science and Software Engineering"
-    company: "Remedy Partners"
-    employment_period: "3/2016 - 05/2018"
-    location: "New York, NY"
-    industry: "Healthcare IT"
-    key_responsibilities:
-      - responsibility_1: "Created the vision and implemented roadmap for the department. Introduced and built several core products over the full engineering life-cycle, including mobile front end, and AI data driven back end. Enforced required standards and sound engineering practices in data governance, handling protected data, reproducibility, and quality control. Established and managed actionable KPIs and success metrics. Had zero privacy incidents"
-      - responsibility_2:  "Successfully lead, inspired, motivated, retained and grown the Data Science and Engineering team from 5 to 20, with zero attrition. Through strategic mentorship and support grown a new generation of leaders with 3 people promoted to leadership roles"
-      - responsibility_3:  "Actively promoted data-driven decision-making under strict constraints of medical data privacy. Provided oversight and direction for the design, development, and evaluation of predictive models and advanced algorithms. Identified new opportunities, prioritized initiatives that maximized business value and provided actionable insights by using algorithmic, statistical, visualization, and data mining techniques. Total risk-adjusted savings resulted from the adoption of these products exceeded 50 Million USD per year. Led the creation of a unified data handling and delivery pipelines applied to data acquired from multiple sources. Provided due diligence for outside investors resulted in a significant investment"
-    skills_acquired:
-      - "SQL"
-      - "Software development"
-      - "Big Data"
-      - "Cloud Platforms"
-      - "AWS"
-      - "HIPAA"
-      - "Statistics"
-      - "GDPR"
-      - "Project Management"
+#      - responsibility_1: "Created the vision and implemented roadmap for the department. Introduced and built several core products over the full engineering life-cycle, including mobile front end, and AI data driven back end. Enforced required standards and sound engineering practices in data governance, handling protected data, reproducibility, and quality control. Established and managed actionable KPIs and success metrics. Had zero privacy incidents"
+#      - responsibility_2: "Successfully lead, inspired, motivated, retained and grown the Data Science and Engineering team from 5 to 20, with zero attrition. Through strategic mentorship and support grown a new generation of leaders with 3 people promoted to leadership roles"
+#      - responsibility_3: "Actively promoted data-driven decision-making under strict constraints of medical data privacy. Provided oversight and direction for the design, development, and evaluation of predictive models and advanced algorithms. Identified new opportunities, prioritized initiatives that maximized business value and provided actionable insights by using algorithmic, statistical, visualization, and data mining techniques. Total risk-adjusted savings resulted from the adoption of these products exceeded 50 Million USD per year. Led the creation of a unified data handling and delivery pipelines applied to data acquired from multiple sources. Provided due diligence for outside investors resulted in a significant investment"
 
-  - position: "Co-founder, CTO, Data Scientist, Software Developer"
+  - position: "Product Manager, Data Science"
     company: "Keenetix"
-    employment_period: "08/2005 - 03/2016"
+    employment_period: "02/2010 - 03/2016"
     location: "Salem, NH"
     industry: "IT and Data Science"
     key_responsibilities:
@@ -111,6 +95,14 @@ experience_details:
       - responsibility_2:  "Created technical solutions based on sound engineering principals to derive actionable insights and to facilitate business decision-making in real time, by merging GIS, multi-spectral imagery, Lidar, and SAR satellite data with health and climate records to create vulnerability scores and risk maps for WHO."
       - responsibility_3:  "Actively promoted data-driven decision-making under strict constraints of medical data privacy. Provided oversight and direction for the design, development, and evaluation of predictive models and advanced algorithms. Identified new opportunities, prioritized initiatives that maximized business value and provided actionable insights by using algorithmic, statistical, visualization, and data mining techniques."
     skills_acquired:
+      - "SQL"
+      - "Big Data"
+      - "Cloud Platforms"
+      - "AWS"
+      - "HIPAA"
+      - "Statistics"
+      - "GDPR"
+      - "Project Management"
       - "Software development"
       - "Team Management"
       - "Agile Methodologies"
@@ -118,7 +110,65 @@ experience_details:
       - "AI Governance"
       - "Statistics"
       - "Programming"
+
+  - position: "Project Development Manager, Data Science"
+    company: "Keenetix"
+    employment_period: "09/2008 - 02/2010"
+    location: "Salem, NH"
+    industry: "IT and Data Science"
+    key_responsibilities:
+    skills_acquired:
+      - "SQL"
+      - "Big Data"
+      - "Cloud Platforms"
+      - "AWS"
+      - "HIPAA"
+      - "Statistics"
+      - "GDPR"
       - "Project Management"
+      - "Software development"
+      - "Team Management"
+      - "Agile Methodologies"
+      - "Data Ethics"
+      - "AI Governance"
+      - "Statistics"
+      - "Programming"
+
+  - position: "Lead Development Engineer"
+    company: "Keenetix"
+    employment_period: "07/2005 - 09/2008"
+    location: "Salem, NH"
+    industry: "IT and Data Science"
+    key_responsibilities:
+    skills_acquired:
+      - "C#"
+      - "Python"
+      - "SQL"
+      - "Cloud Platforms"
+      - "AWS"
+      - "Software development"
+      - "Agile Methodologies"
+      - "Data Ethics"
+      - "Data Governance"
+      - "Programming"
+
+  - position: "Principal Engineer"
+    company: "Digimarc"
+    employment_period: "2002-07/2005"
+    location: "Burlington, MA"
+    industry: "IT and Data Science"
+    key_responsibilities:
+    skills_acquired:
+      - "C#"
+      - "Python"
+      - "SQL"
+      - "Cloud Platforms"
+      - "AWS"
+      - "Software development"
+      - "Agile Methodologies"
+      - "Data Ethics"
+      - "Data Governance"
+      - "Programming"
 
 projects:
 
