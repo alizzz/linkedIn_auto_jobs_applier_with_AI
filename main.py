@@ -141,6 +141,7 @@ class FileManager:
 
         output_folder = app_data_folder / 'output'
         output_folder.mkdir(exist_ok=True)
+        print(f"loading config files: {','.join(required_dict.values())}")
         return (app_data_folder / required_dict["secrets"], app_data_folder / required_dict["config"], app_data_folder / required_dict["plain_resume"], output_folder)
 
     @staticmethod
