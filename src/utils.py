@@ -87,6 +87,29 @@ def chromeBrowserOptions():
 
     return options
 
+def printcolor(text, color="none", intensity="none"):
+    RESET = "\033[0m"
+    colors = {
+        "none": 0,
+        "black": 30,
+        "red": 31,
+        "green": 32,
+        "yellow": 33,
+        "blue": 34,
+        "magenta": 35,
+        "cyan": 36,
+        "white": 37
+    }
+
+    intensity_offsets = {
+        "none": 0,
+        "normal": 0,
+        "bright": 60
+    }
+    _color = colors.get(color.lower(), 0)
+    _offset = intensity_offsets.get(intensity.lower(), 0)
+    COLOR = f"\033[{_color+_offset}m"
+    print(f"{COLOR}{text}{RESET}")
 
 def printred(text):
     # Codice colore ANSI per il rosso

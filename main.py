@@ -16,6 +16,8 @@ from src.linkedIn_bot_facade import LinkedInBotFacade
 from src.linkedIn_job_manager import LinkedInJobManager
 from src.job_application_profile import JobApplicationProfile
 
+import context
+
 # Suppress stderr
 sys.stderr = open(os.devnull, 'w')
 
@@ -122,19 +124,24 @@ class FileManager:
         return next((file for file in at_path.iterdir() if name_containing.lower() in file.name.lower() and file.suffix.lower() == with_extension.lower()), None)
 
     @staticmethod
-    def validate_data_folder(app_data_folder: Path) -> tuple:
+    def validate_data_folder(app_data_folder: Path, required_dict: dict = None) -> tuple:
         if not app_data_folder.exists() or not app_data_folder.is_dir():
             raise FileNotFoundError(f"Data folder not found: {app_data_folder}")
 
-        required_files = ['secrets.yaml', 'config.yaml', 'plain_text_resume.yaml']
-        missing_files = [file for file in required_files if not (app_data_folder / file).exists()]
-        
+        if required_dict is None:
+            required_dict = {
+                'plain_resume': 'plain_text_resume.yaml',
+                'secrets': 'secrets.yaml',
+                'config': 'config.yaml'
+            }
+        #required_files = ['secrets.yaml', 'config.yaml', 'plain_text_resume.yaml']
+        missing_files = [file for file in required_dict.values() if not (app_data_folder / file).exists()]
         if missing_files:
             raise FileNotFoundError(f"Missing files in the data folder: {', '.join(missing_files)}")
 
         output_folder = app_data_folder / 'output'
         output_folder.mkdir(exist_ok=True)
-        return (app_data_folder / 'secrets.yaml', app_data_folder / 'config.yaml', app_data_folder / 'plain_text_resume.yaml', output_folder)
+        return (app_data_folder / required_dict["secrets"], app_data_folder / required_dict["config"], app_data_folder / required_dict["plain_resume"], output_folder)
 
     @staticmethod
     def file_paths_to_dict(resume_file: Path | None, plain_text_resume_file: Path) -> dict:
@@ -162,7 +169,7 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
     try:
         style_manager = StyleManager()
         resume_generator = ResumeGenerator()
-        with open(parameters['uploads']['plainTextResume'], "r") as file:
+        with open(parameters['uploads']['plainTextResume'], "r", encoding='iso-8859-1') as file:
             plain_text_resume = file.read()
         resume_object = Resume(plain_text_resume)
         resume_generator_manager = FacadeManager(openai_api_key, style_manager, resume_generator, resume_object, Path("data_folder/output"))
@@ -191,10 +198,18 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
 
 @click.command()
 @click.option('--resume', type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path), help="Path to the resume PDF file")
-def main(resume: Path = None):
+@click.option('--plain', type=str, default="plain_text_resume.yaml", help="Path to default plain text resume yaml file")
+@click.option('--secret', type=str, default="secrets.yaml", help="Path to default plain text resume yaml file")
+@click.option('--config', type=str, default="config.yaml", help="Path to default plain text resume yaml file")
+def main(resume: Path = None, plain: str = None, secret: str = None, config: str = None):
     try:
         data_folder = Path("data_folder")
-        secrets_file, config_file, plain_text_resume_file, output_folder = FileManager.validate_data_folder(data_folder)
+        config_dict = {
+            'plain_resume': plain,
+            'secrets': secret,
+            'config': config}
+
+        secrets_file, config_file, plain_text_resume_file, output_folder = FileManager.validate_data_folder(data_folder, config_dict)
         
         parameters = ConfigValidator.validate_config(config_file)
         email, password, openai_api_key = ConfigValidator.validate_secrets(secrets_file)

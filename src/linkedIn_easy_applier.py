@@ -1,4 +1,7 @@
+import os
+import shutil
 import base64
+import datetime
 import json
 import os
 import random
@@ -6,7 +9,6 @@ import re
 import tempfile
 import time
 import traceback
-from datetime import date
 from typing import List, Optional, Any, Tuple
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -136,7 +138,9 @@ class LinkedInEasyApplier:
         if 'submit application' in button_text:
             self._unfollow_company()
             time.sleep(random.uniform(1.5, 2.5))
-            next_button.click()
+            #ToDo - Enable submit button when finished testing
+            #next_button.click()
+            print(f'SUBMIT APPLICATION IS DISABLED DURING DEBUGGING {datetime.datetime.now()}')
             time.sleep(random.uniform(1.5, 2.5))
             return True
         time.sleep(random.uniform(1.5, 2.5))
@@ -195,11 +199,40 @@ class LinkedInEasyApplier:
             elif 'cover' in output:
                 self._create_and_upload_cover_letter(element)
 
+    def rename_and_move_file_if_exists(self, file_path, backup_dir = 'bak'):
+        # Get the file name and extension
+        file_name, file_extension = os.path.splitext(os.path.basename(file_path))
+        # Generate a timestamp
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Create a new file name with the timestamp
+        new_file_name = f"{file_name}_{timestamp}{file_extension}"
+        try:
+            # Check if the file exists
+            if os.path.exists(file_path):
+                # Create a 'bak' subdirectory if it doesn't exist
+                bak_directory = os.path.join(os.path.dirname(file_path), backup_dir)
+                if not os.path.exists(bak_directory):
+                    os.makedirs(bak_directory)
+
+                # Set the new file path in the 'bak' directory
+                new_file_path = os.path.join(bak_directory, new_file_name)
+
+                # Move and rename the file
+                shutil.move(file_path, new_file_path)
+                print(f"File '{file_path}' renamed to '{new_file_name}' and moved to '{backup_dir}/' directory.")
+        except Exception as e:
+            print(f"Exception while moving existing file '{file_path}' renamed to '{new_file_name}' and moved to '{backup_dir}/' directory. ")
+
     def _create_and_upload_resume(self, element, job):
         folder_path = 'generated_cv'
         os.makedirs(folder_path, exist_ok=True)
         try:
-            file_path_pdf = os.path.join(folder_path, f"CV_{random.randint(0, 9999)}.pdf")
+            name = self.resume_generator_manager.resume_generator.resume_object.personal_information.name
+            surname = self.resume_generator_manager.resume_generator.resume_object.personal_information.surname
+            link_id = job.link.split('/')[-2]
+            file_path_pdf = os.path.join(folder_path, f"{name}_{surname}.{link_id}.pdf")
+
+            self.rename_and_move_file_if_exists(file_path_pdf)
             with open(file_path_pdf, "xb") as f:
                 f.write(base64.b64decode(self.resume_generator_manager.pdf_base64(job_description_text=job.description)))
             element.send_keys(os.path.abspath(file_path_pdf))

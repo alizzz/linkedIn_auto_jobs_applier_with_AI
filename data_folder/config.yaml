@@ -1,4 +1,4 @@
-remote: false
+remote: true
 
 experienceLevel:
  internship: false
@@ -24,19 +24,14 @@ date:
  24 hours: true
 
 positions:
-  - Project Manager
+  - Director Software Development
+
 
 locations:
-  - Chicago, IL
+  - Miami, FL
 
 distance: 100
 
 companyBlacklist:
-  - Ancestry
-  - Google
-  - Nvidia
-  - Microsoft
-  - Meta
-  - Netflix
 
 titleBlacklist:

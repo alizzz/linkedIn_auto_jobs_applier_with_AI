@@ -1,3 +1,4 @@
+import datetime
 import os
 import random
 import time
@@ -154,18 +155,51 @@ class LinkedInJobManager:
                 continue
         
     def write_to_file(self, job, file_name):
+        def split_string(str, sep=',', pos=0):
+            ss = str
+            try:
+                ss = str.split(sep)[pos].strip()
+            except Exception as e:
+                print(f"Failed to split string {str}, sep={sep}, pos={pos}. "
+                      f"Exception {e}")
+            return ss
+
         pdf_path = Path(job.pdf_path).resolve()
         pdf_path = pdf_path.as_uri()
+        dt = datetime.datetime.now().strftime("%Y-%m-%d.%H-%M-%S")
+        job_title = split_string(job.title, sep="\n", pos=0)
+        company_name = split_string(job.company, sep='·', pos=0)
+        company_location = split_string(split_string(job.company, sep='·', pos=1),"(",0)
+        company_id = split_string(job.link, sep='/',pos=-2)
+        office_policy = split_string(split_string(job.company, sep='·', pos=1),"(",1)[:-1]
+        job_desc_path = self.output_file_directory / "job_desc"
+        job_desc_file = job_desc_path / f'{company_id}.{company_name}.{job_title}.{dt}.txt'
+
         data = {
-            "company": job.company,
-            "job_title": job.title,
+            "datetime": dt,
+            "company_id": company_id,
+            "company_name": company_name,
+            "company_location": company_location,
+            "office_policy": office_policy,
+            "job_title": job_title,
             "link": job.link,
             "job_recruiter": job.recruiter_link,
             "job_location": job.location,
-            "pdf_path": pdf_path
+            "pdf_path": pdf_path,
+            "job_desc_path": job_desc_file.resolve().as_uri(),
+            "applied": "unk"
         }
+        try:
+            utils.printyellow(f"Writing to job description to file {job_desc_file.resolve().as_uri()}; title: {job_title}; company: {company_name}")
+            if not os.path.exists(job_desc_path):
+                os.makedirs(job_desc_path)
+            with open(job_desc_file, 'w') as file:
+                file.write(job.description)
+        except Exception as e:
+            print(f'Exception while saving job description file {job_desc_file.resolve().as_uri()}')
+
         file_path = self.output_file_directory / f"{file_name}.json"
-        utils.printyellow(f"Writing to file: path: {pdf_path}; title: {job.title}; company: {job.company}")
+        utils.printyellow(f"Writing to file: pdf_path: {pdf_path}; title: {job_title}; company: {company_name}")
         if not file_path.exists():
             utils.printyellow(f"file_path {file_path} doesn't exist, creating")
             with open(file_path, 'w', encoding='utf-8') as f:
