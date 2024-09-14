@@ -20,6 +20,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver import ActionChains
 import src.utils as utils
+#import src.config as config
 
 class LinkedInEasyApplier:
     def __init__(self, driver: Any, resume_dir: Optional[str], set_old_answers: List[Tuple[str, str, str]], gpt_answerer: Any, resume_generator_manager):
@@ -138,9 +139,17 @@ class LinkedInEasyApplier:
         if 'submit application' in button_text:
             self._unfollow_company()
             time.sleep(random.uniform(1.5, 2.5))
+
             #ToDo - Enable submit button when finished testing
-            #next_button.click()
-            print(f'SUBMIT APPLICATION IS DISABLED DURING DEBUGGING {datetime.datetime.now()}')
+            DEBUG = False
+            if DEBUG:
+                print(f'SUBMIT APPLICATION IS DISABLED DURING DEBUGGING {datetime.datetime.now()}. Not applied for: Company: {self.gpt_answerer.job.company} Title: {self.gpt_answerer.job.title} ID:{self.gpt_answerer.job.id}')
+                self.gpt_answerer.job.set_application_status("Not Applied - DEBUG")
+            else:
+                next_button.click()
+                self.gpt_answerer.job.set_application_status("Applied")
+                print(f'SUBMITTED APPLICATION For Company: {self.gpt_answerer.job.company} Title: {self.gpt_answerer.job.title} ID:{self.gpt_answerer.job.id} Time:{datetime.datetime.now()}')
+
             time.sleep(random.uniform(1.5, 2.5))
             return True
         time.sleep(random.uniform(1.5, 2.5))
@@ -197,8 +206,65 @@ class LinkedInEasyApplier:
                 else:
                     self._create_and_upload_resume(element, job)
             elif 'cover' in output:
-                self._create_and_upload_cover_letter(element)
+                letter_path = self._create_and_upload_cover_letter(element)
 
+    def create_backup_file_name(self, file_directory, file_name, file_extension=None):
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Create a new file name with the timestamp
+        if file_extension is None:
+            file_name_with_timestamp = f"{file_name}_{timestamp}"
+        else:
+            file_name_with_timestamp = f"{file_name}_{timestamp}.{file_extension}"
+        return  os.path.join(file_directory, file_name_with_timestamp)
+
+    #writing two copies of the same file - one is always the latest version, wihtout the timestamp
+    #another one is in the backup directory with a timestamp
+    def safe_save_file_with_backup(self, file_path, data, timestamp="", backup_dir = 'bak', overwrite = False ):
+        try:
+            bak_directory = os.path.join(os.path.dirname(file_path), backup_dir)
+            # Get the file name and extension
+            file_name, file_extension = os.path.splitext(os.path.basename(file_path))
+            # Generate a timestamp
+            if len(timestamp)==0:
+                timestamp = datetime.datetime.now().strftime("%Y%m%d.%H%M%S.%f")[:-3]
+
+            # Create a new file name with the timestamp
+            file_name_with_timestamp = f"{file_name}.{timestamp}{file_extension}"
+            bak_file_path = os.path.join(bak_directory, file_name_with_timestamp)
+            try:
+                # always keep only the latest version in the main directory - remove file if it exists
+                if not os.path.exists(bak_directory):
+                    os.makedirs(bak_directory)
+                # Check if the file exists
+
+                if os.path.exists(file_path):
+                    if overwrite:
+                        os.remove(file_path)
+                        with open(file_path, "xb") as f:
+                            f.write(data)
+                else:
+                    with open(file_path, "xb") as f:
+                        f.write(data)
+
+                if os.path.exists(bak_file_path):
+                    if overwrite:
+                        os.remove(bak_file_path)
+                        with open(bak_file_path, "xb") as f:
+                            f.write(data)
+                else:
+                    with open(bak_file_path, "xb") as f:
+                        f.write(data)
+
+                return file_name_with_timestamp
+
+            #file operations exception
+            except Exception as e:
+                print(f'safe_save_file_with_backup::Failed saving file {file_path}. Exception:{e}')
+                return None
+
+        #all other exceptions
+        except Exception as e:
+            print(f'safe_save_file_with_backup::Failed file {file_path}. Exception:{e}')
     def rename_and_move_file_if_exists(self, file_path, backup_dir = 'bak'):
         # Get the file name and extension
         file_name, file_extension = os.path.splitext(os.path.basename(file_path))
@@ -226,24 +292,61 @@ class LinkedInEasyApplier:
     def _create_and_upload_resume(self, element, job):
         folder_path = 'generated_cv'
         os.makedirs(folder_path, exist_ok=True)
+        pdf_path = 'pdf'
+        html_path = 'html'
+        backup_path = 'bak'
         try:
             name = self.resume_generator_manager.resume_generator.resume_object.personal_information.name
             surname = self.resume_generator_manager.resume_generator.resume_object.personal_information.surname
-            link_id = job.link.split('/')[-2]
-            file_path_pdf = os.path.join(folder_path, f"{name}_{surname}.{link_id}.pdf")
+            if len(job.id)>0:
+                link_id = job.id
+            else:
+                link_id = job.link.split('/')[-2]
+                job.id = link_id
 
-            self.rename_and_move_file_if_exists(file_path_pdf)
-            with open(file_path_pdf, "xb") as f:
-                f.write(base64.b64decode(self.resume_generator_manager.pdf_base64(job_description_text=job.description)))
+            if not os.path.exists(os.path.join(folder_path, pdf_path)):
+                os.makedirs(os.path.join(folder_path, pdf_path))
+            if not os.path.exists(os.path.join(folder_path, html_path)):
+                os.makedirs(os.path.join(folder_path, html_path))
+
+            file_path_pdf = os.path.join(folder_path, pdf_path, f"{name}_{surname}.{link_id}.pdf")
+            file_path_html = os.path.join(folder_path, html_path, f"{name}_{surname}.{link_id}.html")
+
+            #Note: pdf_base64 has a side effect of saving html resume file
+            file_name_with_timestamp = self.safe_save_file_with_backup(file_path_pdf, base64.b64decode(self.resume_generator_manager.pdf_base64(job_description_text=job.description, html_file_name=file_path_html, delete_html_file=False)))
+            #previous call has created a file_path_html. Now we need to make a copy of it.
+            print(f'saved pdf file {file_name_with_timestamp}')
+            fn, ext = os.path.splitext(file_name_with_timestamp)
+            html_path_bak = os.path.join(folder_path, html_path, backup_path)
+            html_path_back_file = os.path.join(html_path_bak, f'{fn}.html')
+            try:
+                if file_name_with_timestamp is not None:
+                    if not os.path.exists(html_path_bak):
+                        os.makedirs(html_path_bak)
+                    shutil.copyfile(file_path_html, html_path_back_file)
+
+            except Exception as e:
+                print(f'Exception while copying html file {file_name_with_timestamp}. Error {e}')
+
+
+            #self.rename_and_move_file_if_exists(file_path_pdf)
+            #with open(file_path_pdf, "xb") as f:
+            #    f.write(base64.b64decode(self.resume_generator_manager.pdf_base64(job_description_text=job.description)))
             element.send_keys(os.path.abspath(file_path_pdf))
             job.pdf_path = os.path.abspath(file_path_pdf)
+            job.html_path=os.path.abspath(html_path_back_file)
             time.sleep(2)
         except Exception:
             tb_str = traceback.format_exc()
             raise Exception(f"Upload failed: \nTraceback:\n{tb_str}")
 
-    def _create_and_upload_cover_letter(self, element: WebElement) -> None:
+    #ToDo: create a cover letter, store it, and save its name in success.json
+    #ToDo: create a normal template for the cover letter that matches the resume template
+    def _create_and_upload_cover_letter(self, element: WebElement) -> str:
+        print (f'in _create_and_upload_cover_letter for job-id:{self.gpt_answerer.job.id}')
         cover_letter = self.gpt_answerer.answer_question_textual_wide_range("Write a cover letter")
+        letter_path = ""
+        folder_path = 'generated_cv'
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf_file:
             letter_path = temp_pdf_file.name
             c = canvas.Canvas(letter_path, pagesize=letter)
@@ -254,6 +357,14 @@ class LinkedInEasyApplier:
             c.drawText(text_object)
             c.save()
             element.send_keys(letter_path)
+            try:
+                name = self.resume_generator_manager.resume_generator.resume_object.personal_information.name
+                surname = self.resume_generator_manager.resume_generator.resume_object.personal_information.surname
+                shutil.move(letter_path.split('\\')[-1], os.path.join(folder_path, f'{name}_{surname}.{self.gpt_answerer.job.id}.Cover.pdf'))
+            except Exception as e:
+                print(f'Failed to move cover letter for job id: {self.gpt_answerer.job.id}. Original file is {letter_path}')
+
+        return letter_path
 
     def _fill_additional_questions(self) -> None:
         form_sections = self.driver.find_elements(By.CLASS_NAME, 'jobs-easy-apply-form-section__grouping')

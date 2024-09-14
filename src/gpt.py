@@ -117,6 +117,7 @@ class GPTAnswerer:
         self.llm_cheap = LoggerChatModel(
             ChatOpenAI(model_name="gpt-4o-mini", openai_api_key=openai_api_key, temperature=0.4)
         )
+        self.job = None
     @property
     def job_description(self):
         return self.job.description
@@ -145,6 +146,12 @@ class GPTAnswerer:
     def set_job(self, job):
         self.job = job
         self.job.set_summarize_job_description(self.summarize_job_description(self.job.description))
+        self.job.set_compensaton(self.job_compensation(self.job_description))
+        try:
+            if len(self.job.link) > 0 :
+                self.job.id = self.job.link.split('/')[-2]
+        except Exception as e:
+            print(f"Exception in set_job while setting job.id Error:{e}")
 
     def set_job_application_profile(self, job_application_profile):
         self.job_application_profile = job_application_profile
@@ -157,7 +164,17 @@ class GPTAnswerer:
         chain = prompt | self.llm_cheap | StrOutputParser()
         output = chain.invoke({"text": text})
         return output
-            
+
+    def job_compensation(self, job_desc:str) -> str:
+        strings.prompt_job_compensation = self._preprocess_template_string(
+            strings.prompt_job_compensation
+        )
+        prompt = ChatPromptTemplate.from_template(strings.prompt_job_compensation)
+        chain = prompt | self.llm_cheap | StrOutputParser()
+        output = chain.invoke({"job_description": job_desc})
+        print(f"Salary compensation range is {output}")
+        return output
+
     def _create_chain(self, template: str):
         prompt = ChatPromptTemplate.from_template(template)
         return prompt | self.llm_cheap | StrOutputParser()

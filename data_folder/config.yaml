@@ -4,7 +4,7 @@ experienceLevel:
  internship: false
  entry: false
  associate: false
- mid-senior level: true
+ mid-senior level: false
  director: true
  executive: true
 
@@ -33,5 +33,6 @@ locations:
 distance: 100
 
 companyBlacklist:
+ Harnham
 
 titleBlacklist:

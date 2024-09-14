@@ -11,7 +11,18 @@ import src.utils as utils
 from src.job import Job
 from src.linkedIn_easy_applier import LinkedInEasyApplier
 import json
-
+from lib_resume_builder_AIHawk.config import global_config
+import re
+def make_valid_path(path_string):
+    # Define the invalid characters for file paths
+    # On Windows: \ / : * ? " < > |
+    # On Unix-like systems, only '/' is invalid
+    if os.name == 'nt':  # Windows
+        # Replace invalid characters with underscores
+        return re.sub(r'[<>:"/\\|?*]', '_', path_string)
+    else:  # Unix-like (Linux, macOS)
+        # Replace '/' with underscores
+        return path_string.replace('/', '_')
 
 class EnvironmentKeys:
     def __init__(self):
@@ -97,7 +108,7 @@ class LinkedInJobManager:
                         time.sleep(time_left)
                         minimum_page_time = time.time() + minimum_time
                     if page_sleep % 5 == 0:
-                        sleep_time = random.randint(5, 34)
+                        sleep_time = random.randint(5, 15)
                         utils.printyellow(f"Sleeping for {sleep_time / 60} minutes.")
                         time.sleep(sleep_time)
                         page_sleep += 1
@@ -164,39 +175,57 @@ class LinkedInJobManager:
                       f"Exception {e}")
             return ss
 
-        pdf_path = Path(job.pdf_path).resolve()
-        pdf_path = pdf_path.as_uri()
-        dt = datetime.datetime.now().strftime("%Y-%m-%d.%H-%M-%S")
+        def extract_office_policy(str):
+            print(f'Extracting office policy from {str}')
+            office_policy = split_string(str, "(", 1)[:-1]
+            print(f'returning office policy {office_policy}')
+            return office_policy
+
+
+        pdf_path = Path(job.pdf_path).resolve().as_uri()
+        pdf_file_name = os.path.split(job.pdf_path)[1]
+
+        html_path = Path(job.html_path).resolve().as_uri()
+        html_file_name = os.path.split(job.html_path)[1]
+
+        dt = datetime.datetime.now().strftime("%Y-%m-%d.%H-%M-%S.%f")[:-3]
         job_title = split_string(job.title, sep="\n", pos=0)
         company_name = split_string(job.company, sep='·', pos=0)
-        company_location = split_string(split_string(job.company, sep='·', pos=1),"(",0)
-        company_id = split_string(job.link, sep='/',pos=-2)
-        office_policy = split_string(split_string(job.company, sep='·', pos=1),"(",1)[:-1]
+        company_location = split_string(job.location, sep="(", pos=0).strip()
+        job.id = split_string(job.link, sep='/',pos=-2)
+
+        office_policy = extract_office_policy(job.location)
         job_desc_path = self.output_file_directory / "job_desc"
-        job_desc_file = job_desc_path / f'{company_id}.{company_name}.{job_title}.{dt}.txt'
+        #sometimes there are invalid characters in the company name or job title, i.e. AI/ML
+        #sanitize prior to creating a job desc file path
+        comp_id = make_valid_path(company_name)
+        #job_desc_file = job_desc_path / f'{job_id}.{make_valid_path(company_name)}.{make_valid_path(job_title)}.{dt}.txt'
+        job_desc_file = f'{job.id}.{make_valid_path(company_name)}.{make_valid_path(job_title)}.{dt}.txt'
 
         data = {
             "datetime": dt,
-            "company_id": company_id,
+            "job_id": job.id,
+            "job_title": job_title,
             "company_name": company_name,
             "company_location": company_location,
             "office_policy": office_policy,
-            "job_title": job_title,
-            "link": job.link,
-            "job_recruiter": job.recruiter_link,
+            "job_compensation": job.compensation,
             "job_location": job.location,
-            "pdf_path": pdf_path,
-            "job_desc_path": job_desc_file.resolve().as_uri(),
+            "job_recruiter": job.recruiter_link,
+            "link": job.link,
+            "resume_pdf": pdf_file_name,
+            "resume_html": html_file_name,
+            "job_desc_path": job_desc_file,
             "applied": "unk"
         }
         try:
-            utils.printyellow(f"Writing to job description to file {job_desc_file.resolve().as_uri()}; title: {job_title}; company: {company_name}")
+            utils.printyellow(f"Writing to job description to file {job_desc_file}; title: {job_title}; company: {company_name}")
             if not os.path.exists(job_desc_path):
                 os.makedirs(job_desc_path)
-            with open(job_desc_file, 'w') as file:
+            with open(job_desc_path / job_desc_file, 'w') as file:
                 file.write(job.description)
         except Exception as e:
-            print(f'Exception while saving job description file {job_desc_file.resolve().as_uri()}')
+            print(f'Exception while saving job description file {job_desc_file}. Exception {e}')
 
         file_path = self.output_file_directory / f"{file_name}.json"
         utils.printyellow(f"Writing to file: pdf_path: {pdf_path}; title: {job_title}; company: {company_name}")

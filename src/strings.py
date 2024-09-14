@@ -413,3 +413,13 @@ func_summarize_prompt_template = """
         {text_with_placeholders}
         
         ## Text without placeholders:"""
+
+prompt_job_compensation = """
+You are an experienced HR professional and job analyst. 
+You task is to determine a pay range for the job below. If not known, estimate based on company name, location, title, and job description. 
+Respond only with the range. If can not determine from the text, and estimpated add "(estimated)" but only if range was estimated and not listed anywhere in the description.
+
+**Job Description:**
+{job_description}
+
+"""
