@@ -372,6 +372,7 @@ class LinkedInEasyApplier:
             job.cover.set_docset(docset_name='cover', path=job.path, name=f'{_file_name}.Cover')
             job.job_docset.set_docset(docset_name='job', path=job.path, name=f'{job.id}.{job._truncated_company_name}.{job._abbreviated_position}')
 
+            print(f'About to create a resume for {job.description} jobid: {job.id}. Pdf file:{job.resume.pdf}, html file: {job.resume.html}, job file: {job.job_docset.txt}')
             pdf_b64 = self.resume_generator_manager.pdf_base64(job_description_text=job.description, html_file_name=job.resume.html, delete_html_file=False)
             pdf_data = base64.b64decode(pdf_b64)
             with open(job.resume.pdf, "xb") as f:
