@@ -195,29 +195,23 @@ class LinkedInEasyApplier:
         return self.gpt_answerer.get_job_compensation_from_job_description(self.gpt_answerer.job.description)
 
     def _get_job_description(self) -> str:
-        if (self.gpt_answerer is None or
-                self.gpt_answerer.job is None or
-                self.gpt_answerer.job.description is None
-                or len(self.gpt_answerer.job.description)==0):
+        try:
             try:
-                try:
-                    see_more_button = self.driver.find_element(By.XPATH, '//button[@aria-label="Click to see more description"]')
-                    actions = ActionChains(self.driver)
-                    actions.move_to_element(see_more_button).click().perform()
-                    time.sleep(2)
-                except:
-                    print(r'Failed to find a button xpath://button[@aria-label="Click to see more description"')
-                    pass
-                description = self.driver.find_element(By.CLASS_NAME, 'jobs-description-content__text').text
-                return description
-            except NoSuchElementException:
-                tb_str = traceback.format_exc()
-                raise Exception("Job description not found: \nTraceback:\n{tb_str}")
-            except Exception:
-                tb_str = traceback.format_exc()
-                raise Exception(f"Error getting job description: \nTraceback:\n{tb_str}")
-        else:
-            return self.gpt_answerer.job.description
+                see_more_button = self.driver.find_element(By.XPATH, '//button[@aria-label="Click to see more description"]')
+                actions = ActionChains(self.driver)
+                actions.move_to_element(see_more_button).click().perform()
+                time.sleep(2)
+            except:
+                print(r'Failed to find a button xpath://button[@aria-label="Click to see more description"')
+                pass
+            description = self.driver.find_element(By.CLASS_NAME, 'jobs-description-content__text').text
+            return description
+        except NoSuchElementException:
+            tb_str = traceback.format_exc()
+            raise Exception("Job description not found: \nTraceback:\n{tb_str}")
+        except Exception:
+            tb_str = traceback.format_exc()
+            raise Exception(f"Error getting job description: \nTraceback:\n{tb_str}")
 
     def _get_job_recruiter(self):
         try:

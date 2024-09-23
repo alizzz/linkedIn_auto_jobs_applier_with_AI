@@ -297,14 +297,14 @@ class LinkedInJobManager:
                 print(f"Added job {c} to the list. Company:{job.company}, Title:{job.title}, id:{job.id}")
             utils.printyellow(f"len(job_list): {len(job_list)}")
         except Exception as e:
-            print(f'Exception while adding jobs from page. Error: {e}')
+            print(f'Exception while adding jobs from page. len(job_list):{len(job_list)} Error: {e}')
         return job_list
 
     def apply_jobs(self):
-            job_list=[]
+            #job_list=[]
             try:
                 no_jobs_element = self.driver.find_element(By.CLASS_NAME, 'jobs-search-two-pane__no-results-banner--expand')
-                utils.printyellow(f"no_jobs_element: {no_jobs_element}")
+                #utils.printyellow(f"no_jobs_element: {no_jobs_element}")
                 if 'No matching jobs found' in no_jobs_element.text:
                     print("No matching jobs found")
                     raise Exception("No more jobs on this page")
@@ -314,10 +314,18 @@ class LinkedInJobManager:
             except NoSuchElementException:
                 pass
 
-            self.build_job_list(job_list)
+            job_list = self.build_job_list()
 
+            if job_list is None or len(job_list)==0:
+                print("Job list is empty. No jobs found")
+                raise Exception("No more jobs on this page")
+            else:
+                print(f'Found {len(job_list)} jobs on the page')
+
+            k=-1
             for job in job_list:
-                utils.printyellow(f"Processing job title: {job.title}, company: {job.company} apply_method: {job.apply_method}")
+                k+=1
+                utils.printyellow(f"Processing job {k}; title: {job.title}; company name: {job.company}; jobid: {job.id}; apply_method: {job.apply_method}")
                 if self.is_blacklisted(job.title, job.company, job.link):
                     utils.printyellow(f"SKIPPING: Blacklisted {job.title} at {job.company}, skipping...")
                     self.write_to_json(job.base_path, data=job.json, name='skipped')

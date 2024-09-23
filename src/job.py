@@ -78,19 +78,19 @@ class DocSet:
 
 @dataclass
 class Job:
+    id: str = ""
     title: str =''
     company: str=''
     location_raw: str=''
-    link: str=''
     apply_method: str = 'unk'
     description: str = ""
-    job_description_summary: str = ""
-    recruiter_link: str = ""
     compensation: str=""
-    id: str = ""
     office_policy: str = "unk"
+    job_description_summary: str = ""
+    link: str = ''
     skills = []
     quals = []
+    recruiter_link: str = ""
     _user_path: str = None
     _applied: str = 'unk'
     _abbreviated_position: str= None
@@ -107,13 +107,13 @@ class Job:
     cover: DocSet = None
 
     def __post_init__(self):
+        if id == "": self.set_id_from_link(self.link)
+        self.set_office_policy(Job.get_office_policy_from_raw_location(self.location_raw))
+        self.location=Job.get_location_from_raw(self.location_raw)
         self.title=self.title.split('\n')[0].strip()
         self.resume = DocSet('resume')
         self.job_docset=DocSet('job')
         self.cover = DocSet('cover')
-        if id == "": self.set_id_from_link(self.link)
-        self.set_office_policy(Job.get_office_policy_from_raw_location(self.location_raw))
-        self.location=Job.get_location_from_raw(self.location_raw)
 
     def get_json_string(self)->str:
         data = {
