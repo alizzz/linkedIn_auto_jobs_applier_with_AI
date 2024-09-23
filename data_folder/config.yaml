@@ -1,5 +1,7 @@
 remote: true
 
+easy_apply: false
+
 experienceLevel:
  internship: false
  entry: false
@@ -33,6 +35,6 @@ locations:
 distance: 100
 
 companyBlacklist:
- Harnham
+ - Harnham
 
 titleBlacklist:

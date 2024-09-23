@@ -202,7 +202,7 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
         except:
             pass
         jobs_folder = Path(parameters['outputFileDirectory'], _jobs_folder if _jobs_folder is not None else 'Jobs', user_dir)
-        jobs_folder.mkdir(exist_ok=True)
+        os.makedirs(jobs_folder, exist_ok=True)
 
         parameters['outputJobsDirectory'] = jobs_folder.__str__()
         os.environ["OUTPUT_JOBS_DIRECTORY"]=jobs_folder.__str__()
