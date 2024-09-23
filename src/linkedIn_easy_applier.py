@@ -352,29 +352,34 @@ class LinkedInEasyApplier:
             job._abbreviated_position = p
             job.truncated_co_name = c
         try:
-            name = self.resume_generator_manager.resume_generator.resume_object.personal_information.name
-            surname = self.resume_generator_manager.resume_generator.resume_object.personal_information.surname
+            try:
+                name = self.resume_generator_manager.resume_generator.resume_object.personal_information.name
+                surname = self.resume_generator_manager.resume_generator.resume_object.personal_information.surname
 
-            #job.abbreviated_position = self.gpt_answerer._sanitize_and_abbreviate_position(job.title)
-            #job.truncated_company_name = split_by_common_delimiters(job.company)[0]
+                #job.abbreviated_position = self.gpt_answerer._sanitize_and_abbreviate_position(job.title)
+                #job.truncated_company_name = split_by_common_delimiters(job.company)[0]
 
-            #job._user_path = os.path.join(job.base_path,
-            #                              job_folder_name(job.get_dt_string(), job._truncated_company_name, job._abbreviated_position, job.id) )
+                #job._user_path = os.path.join(job.base_path,
+                #                              job_folder_name(job.get_dt_string(), job._truncated_company_name, job._abbreviated_position, job.id) )
 
-            #job_path = os.path.join(job.base_path, job.resume_path)
+                #job_path = os.path.join(job.base_path, job.resume_path)
 
-            os.makedirs(job.path, exist_ok=True)
+                os.makedirs(job.path, exist_ok=True)
 
-            #create resume
-            # Note: pdf_base64 has a side effect of saving html resume file
-            _file_name = f'{name}_{surname}'
-            job.resume.set_docset(docset_name='resume', path=job.path, name=f'{_file_name}.Resume')
-            job.cover.set_docset(docset_name='cover', path=job.path, name=f'{_file_name}.Cover')
-            job.job_docset.set_docset(docset_name='job', path=job.path, name=f'{job.id}.{job._truncated_company_name}.{job._abbreviated_position}')
+                #create resume
+                # Note: pdf_base64 has a side effect of saving html resume file
+                _file_name = f'{name}_{surname}'
+                job.resume.set_docset(docset_name='resume', path=job.path, name=f'{_file_name}.Resume')
+                job.cover.set_docset(docset_name='cover', path=job.path, name=f'{_file_name}.Cover')
+                job.job_docset.set_docset(docset_name='job', path=job.path, name=f'{job.id}.{job._truncated_company_name}.{job._abbreviated_position}')
+            except Exception as e:
+                utils.printred(f'Exception while getting ready to create a resume for jobid {job.id}. Error {e}')
+                utils.printred(traceback.format_exc())
 
             print(f'About to create a resume for {job.description} jobid: {job.id}. Pdf file:{job.resume.pdf}, html file: {job.resume.html}, job file: {job.job_docset.txt}')
             pdf_b64 = self.resume_generator_manager.pdf_base64(job_description_text=job.description, html_file_name=job.resume.html, delete_html_file=False)
             pdf_data = base64.b64decode(pdf_b64)
+
             with open(job.resume.pdf, "xb") as f:
                 f.write(pdf_data)
                 job.resume.created=True
