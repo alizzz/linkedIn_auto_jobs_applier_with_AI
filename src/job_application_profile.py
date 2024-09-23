@@ -123,7 +123,7 @@ class JobApplicationProfile:
 
     def __str__(self):
         def format_dataclass(obj):
-            return "\n".join(f"{field.name}: {getattr(obj, field.name)}" for field in obj.__dataclass_fields__.values())
+            return "\n".join(f"{field.docset_name}: {getattr(obj, field.docset_name)}" for field in obj.__dataclass_fields__.values())
 
         return (f"Self Identification:\n{format_dataclass(self.self_identification)}\n\n"
                 f"Legal Authorization:\n{format_dataclass(self.legal_authorization)}\n\n"

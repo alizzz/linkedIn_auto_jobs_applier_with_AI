@@ -12,7 +12,7 @@ from langchain_core.prompt_values import StringPromptValue
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from Levenshtein import distance
-
+from src.utils import EnvironmentKeys
 import src.strings as strings
 
 load_dotenv()
@@ -25,7 +25,7 @@ class LLMLogger:
 
     @staticmethod
     def log_request(prompts, parsed_reply: Dict[str, Dict]):
-        calls_log = os.path.join(Path("data_folder/output"), "open_ai_calls.json")
+        calls_log =  os.path.join(EnvironmentKeys.get_key('OUTPUT_FILE_DIRECTORY', False, r'data_folder\output'), "open_ai_calls.json")
         if isinstance(prompts, StringPromptValue):
             prompts = prompts.text
         elif isinstance(prompts, Dict):
@@ -145,8 +145,13 @@ class GPTAnswerer:
 
     def set_job(self, job):
         self.job = job
-        self.job.set_summarize_job_description(self.summarize_job_description(self.job.description))
-        self.job.set_compensaton(self.job_compensation(self.job_description))
+        job_desc_summary = self.summarize_job_description(self.job.description)
+        self.job.set_job_description_summary(job_desc_summary)
+        job_comp = self.get_job_compensation_from_job_description(self.job.description)
+        self.job.set_compensaton(job_comp)
+        c, p = self._sanitize_and_abbreviate_position(position=job.title, company_name=job.company)
+        self.job._abbreviated_position = p
+        self.job._truncated_company_name = c
         try:
             if len(self.job.link) > 0 :
                 self.job.id = self.job.link.split('/')[-2]
@@ -156,6 +161,21 @@ class GPTAnswerer:
     def set_job_application_profile(self, job_application_profile):
         self.job_application_profile = job_application_profile
         
+    def _sanitize_and_abbreviate_position(self, position: str, company_name: str):
+        output=position
+        p=position
+        c=company_name
+        try:
+            prompt_sanitize_template = self._preprocess_template_string( strings.prompt_abbreviated_name_title)
+            prompt = ChatPromptTemplate.from_template(prompt_sanitize_template)
+            chain = prompt | self.llm_cheap | StrOutputParser()
+            output = chain.invoke({"position_title": position, "full_company_name": company_name})
+            j = json.loads(output)
+            c = j["company"]
+            p = j["pos"]
+        except Exception as e:
+            print(f'EXCEPTION while abbreviating job title. Original title: {position}. Error: {e}')
+        return c, p
     def summarize_job_description(self, text: str) -> str:
         strings.summarize_prompt_template = self._preprocess_template_string(
             strings.summarize_prompt_template
@@ -165,7 +185,7 @@ class GPTAnswerer:
         output = chain.invoke({"text": text})
         return output
 
-    def job_compensation(self, job_desc:str) -> str:
+    def get_job_compensation_from_job_description(self, job_desc:str) -> str:
         strings.prompt_job_compensation = self._preprocess_template_string(
             strings.prompt_job_compensation
         )

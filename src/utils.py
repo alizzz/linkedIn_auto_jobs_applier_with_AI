@@ -6,6 +6,7 @@ from selenium import webdriver
 
 chromeProfilePath = os.path.join(os.getcwd(), "chrome_profile", "linkedin_profile")
 
+
 def ensure_chrome_profile():
     profile_dir = os.path.dirname(chromeProfilePath)
     if not os.path.exists(profile_dir):
@@ -124,3 +125,33 @@ def printyellow(text):
     RESET = "\033[0m"
     # Stampa il testo in giallo
     print(f"{YELLOW}{text}{RESET}")
+
+class EnvironmentKeys:
+    def __init__(self):
+        self.skip_apply = self._read_env_key_bool("SKIP_APPLY")
+        self.disable_description_filter = self._read_env_key_bool("DISABLE_DESCRIPTION_FILTER")
+
+    @staticmethod
+    def get_key(key:str, is_bool=False, key_default=None):
+        key_d_str = ''
+        key_d_bool = False
+        if is_bool:
+            key_d = key_default if key_default is not None else False
+            return EnvironmentKeys._read_env_key_bool(key, key_d)
+        else:
+            key_d = key_default if key_default is not None else ''
+            return EnvironmentKeys._read_env_key(key, key_d)
+
+    @staticmethod
+    def _read_env_key(key: str, default_value = '') -> str:
+        return os.getenv(key, default_value)
+
+    @staticmethod
+    def _read_env_key_bool(key: str, default_value:bool = False) -> bool:
+        key_value = os.getenv(key)
+        if key_value is not None:
+            key_true = key_value.lower() in ["true", 't', 'y', 'yes', '1', 'on']
+            key_false= key_value.lower() in ["false", 'f', 'n', 'no', '0', 'off']
+            if key_true: return key_true
+            if key_false: return key_false
+        else: return default_value if default_value is not None else False

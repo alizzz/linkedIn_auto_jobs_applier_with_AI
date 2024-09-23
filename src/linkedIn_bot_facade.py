@@ -1,3 +1,4 @@
+from src.gpt import GPTAnswerer
 class LinkedInBotState:
     def __init__(self):
         self.reset()

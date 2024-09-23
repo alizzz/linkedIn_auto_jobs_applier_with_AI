@@ -416,10 +416,56 @@ func_summarize_prompt_template = """
 
 prompt_job_compensation = """
 You are an experienced HR professional and job analyst. 
-You task is to determine a pay range for the job below. If not known, estimate based on company name, location, title, and job description. 
+You task is to determine a pay range for the job below. 
+First thoroughly analyze job description. If compensation is found in the job description, return it without changes. 
+If compensation is not found in the job description, estimate based on company name, location, title, and job description. 
 Respond only with the range. If can not determine from the text, and estimpated add "(estimated)" but only if range was estimated and not listed anywhere in the description.
 
 **Job Description:**
 {job_description}
 
 """
+
+prompt_abbreviated_name_title='''
+You are an experienced company name and title analyst and programmer. Your task is to take company name and position title presented below  
+and abbreivate it so that it will create a short but recognizable name suitable for the folder name. 
+Use a generally acceptable abbreviation or stock market ticker, if available for company name. 
+You can abbreviate: 
+Management to Mgmt, Senior to Sr, Principal to Pr, Junior to Junr, Manager to Mgr, Vice President to VP, Chief Executive Officer to CEO, Chief Technology Officer to CTO, 
+Chief Data Officer to CDO, Chief Product Officer to CPO, Chief Marketing Office to CMO, Business to Bus, 
+Data Scientist to DS, Machine Learning to ML, Artifical Intelligence to AI, Quality Assurance to QA, Software to Sw
+
+The output should be short and suitable as a folder name. 
+
+                **Examples: **
+                '  Input:'
+                '  - job position title: Senior Director of Data Science, Analytics & Machine Learning Engineering. '
+                '  - full company name: Google, LLC
+                '    Output: 
+                       company:Google, pos:Sr.Dir_DS_Analytics_MLEng
+                '  Input:'
+                '  - job position title: Vice President (VP) of Data Science, AI & Machine Learning Engineering. '
+                '  - full company name: Universal Electrical Services for the Northern Illinois and Idaho, Ltd
+                '  Output: 
+                     company:UniversalElectircal, pos:VP_DS_AI_MLEng
+                '  Input:'
+                '  - job position title: Machine Learning Engineer - Threat Intelligence'
+                '  - full company name: Munich Reinsurance Company in Munich, AG'
+                '  Output: '
+                     company:MunichReinisur, pos:MLE_ThreatIntel
+                '  Input: '
+                '  - job position title: Senior DevOps Engineer (GCP and Ansible)'
+                '  - full company name: Quantum Core Innovations of Washington, DC, LLC'
+                ' Output: 
+                    company: QuantumCore, pos:Sr.DevOps_GCP_Ansible
+                
+return just a valid json string of the following format
+company: [abbreviated company name]
+pos: [abbreviated title]
+
+do not output anything else. do not output ```json or ```
+
+**Input:**
+job position title: {position_title}
+full company name:  {full_company_name}
+'''

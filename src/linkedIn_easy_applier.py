@@ -9,6 +9,11 @@ import re
 import tempfile
 import time
 import traceback
+
+import wcwidth
+
+from src.job import Job
+from src.utils import printcolor, printred, printyellow, EnvironmentKeys
 from typing import List, Optional, Any, Tuple
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -51,23 +56,75 @@ class LinkedInEasyApplier:
         except Exception:
             tb_str = traceback.format_exc()
             raise Exception(f"Error loading questions data from JSON file: \nTraceback:\n{tb_str}")
+    def has_been_processed(self, job: Job):
+        res = False
+        for root, dirs, files in os.walk(job.base_path):
+            for subfolder in dirs:
+                # Check if subfolder name matches the pattern
+                if subfolder.split('.')[-1]==job.id:
+                    res = True
+                    is_resume = os.path.exists(os.path.join(job.base_path, subfolder,job.resume.file_name))
+                    is_job_desc = os.path.exists(os.path.join(job.base_path, subfolder,job.job_docset.file_name))
+                    if not( is_resume and is_job_desc):
+                        resume_warning_string = '' if is_resume else 'Resume file does not'
+                        job_desc_warning_string = '' if is_job_desc else 'Job description file does not'
+                        printyellow(
+                            f"ASSERT: {job.path} exists but {resume_warning_string}{' ' if is_resume and is_job_desc else ' and '}{job_desc_warning_string}")
+                        res = True
 
+        return res
 
-    def job_apply(self, job: Any):
+    def job_apply(self, job: Job):
+        res = False
+        #if self.has_been_processed(job):
+        #    printcolor(f'Job {job.id} for {job.abbreviated_position} {job.title} has been already processed. Skipping ')
+        #    return res
         self.driver.get(job.link)
         time.sleep(random.uniform(3, 5))
         try:
-            easy_apply_button = self._find_easy_apply_button()
             job.set_job_description(self._get_job_description())
             job.set_recruiter_link(self._get_job_recruiter())
-            actions = ActionChains(self.driver)
-            actions.move_to_element(easy_apply_button).click().perform()
+            job.set_office_policy(self._get_office_policy())
+            #ToDo: Extract skills
+            job.skills = self._get_skills_from_post()
+            #ToDo: Extract qualifications
+            job.quals = self._get_qual_required()
+
+            #gpt_answerer.set_job(job) uses job description to determine pay range. It has to be called prior to set_job()
+            job.skills = self._get_skills_from_post()
             self.gpt_answerer.set_job(job)
-            self._fill_application_form(job)
+            printcolor(f'About to start creating resume for job id {job.id} in {job.get_base_path()}\\{job.resume_path}', 'blue')
+            self._create_resume(job)
+            printcolor(f'Finished creating resume for job id {job.id} in {job.get_base_path()}\\{job.resume_path}', 'green')
+            self._create_cover(job)
+
+            if job.is_easyApply:
+                easy_apply_button = self._find_easy_apply_button()
+                actions = ActionChains(self.driver)
+                actions.move_to_element(easy_apply_button).click().perform()
+                self._fill_application_form(job)
+                try:
+                    applied_marker_file = os.path.join(job.path, '.applied')
+                    if os.path.exists(applied_marker_file):
+                        os.utime(applied_marker_file, None)
+                    else:
+                        with open(applied_marker_file, 'w') as f:
+                            os.utime(applied_marker_file, None)
+                            f.write(job.link)
+                    print(f'added .applied to jobid:{job.id}, path:{job.path}')
+                except Exception as e:
+                    print(f"Failed saving '.applied' file for {job.base_path}")
+            else:
+                print(f'Job {job.id} for {job.title} at {job.company} in {job.location}({job.office_policy}) is not an Easy Apply. Please review manually')
+                #job.applied="No"
+
+            res = True
         except Exception:
             tb_str = traceback.format_exc()
             self._discard_application()
             raise Exception(f"Failed to apply to job! Original exception: \nTraceback:\n{tb_str}")
+
+        return res
 
     def _find_easy_apply_button(self) -> WebElement:
         attempt = 0
@@ -93,23 +150,74 @@ class LinkedInEasyApplier:
                 time.sleep(3)  
             attempt += 1
         raise Exception("No clickable 'Easy Apply' button found")
-    
+
+    def is_application_submitted(self) -> bool:
+        try:
+            res = self.driver.find_element(By.CLASS_NAME, 'post-apply-timeline__entity').text
+            if res is not None and len(res)>0:
+                if 'application submitted' in res.lower():
+
+                    return True
+        except Exception as e:
+            print(f'Exception in LinkedInEasyApplier::is_application_submitted(). Error {e}')
+        return False
+    def _get_office_policy(self) -> str :
+        policy = "unk"
+        try:
+            res = self.driver.find_element(By.CLASS_NAME,'mb2').text
+            policy = res.split('\n')[0]
+            print(res)
+        except:
+            pass
+        return policy
+
+    def _get_qual_required(self) -> List[str]:
+        #ToDo: Extract required qualifications from the job post
+        return []
+
+    def _get_skills_from_post(self) -> List[str]:
+        #ToDo: Extract skills added by the job poster
+        #[list]  CLASS:
+        class_name = "job-details-how-you-match__skills-section-descriptive-skill"
+        class_name = 'job-details-how-you-match__skills-item-subtitle'
+        skills = []
+        try:
+            res = self.driver.find_elements(By.CLASS_NAME, class_name)
+            if res is not None or len(res)>0:
+                for res_skill in res:
+                    skills_txt = res_skill.text
+                    [skills.append(skill) for skill in skills_txt.split(",")]
+        except:
+            pass
+        return skills
+
+    def _get_compensation(self)->str:
+        return self.gpt_answerer.get_job_compensation_from_job_description(self.gpt_answerer.job.description)
 
     def _get_job_description(self) -> str:
-        try:
-            see_more_button = self.driver.find_element(By.XPATH, '//button[@aria-label="Click to see more description"]')
-            actions = ActionChains(self.driver)
-            actions.move_to_element(see_more_button).click().perform()
-            time.sleep(2)
-            description = self.driver.find_element(By.CLASS_NAME, 'jobs-description-content__text').text
-            return description
-        except NoSuchElementException:
-            tb_str = traceback.format_exc()
-            raise Exception("Job description 'See more' button not found: \nTraceback:\n{tb_str}")
-        except Exception:
-            tb_str = traceback.format_exc()
-            raise Exception(f"Error getting Job description: \nTraceback:\n{tb_str}")
-
+        if (self.gpt_answerer is None or
+                self.gpt_answerer.job is None or
+                self.gpt_answerer.job.description is None
+                or len(self.gpt_answerer.job.description)==0):
+            try:
+                try:
+                    see_more_button = self.driver.find_element(By.XPATH, '//button[@aria-label="Click to see more description"]')
+                    actions = ActionChains(self.driver)
+                    actions.move_to_element(see_more_button).click().perform()
+                    time.sleep(2)
+                except:
+                    print(r'Failed to find a button xpath://button[@aria-label="Click to see more description"')
+                    pass
+                description = self.driver.find_element(By.CLASS_NAME, 'jobs-description-content__text').text
+                return description
+            except NoSuchElementException:
+                tb_str = traceback.format_exc()
+                raise Exception("Job description not found: \nTraceback:\n{tb_str}")
+            except Exception:
+                tb_str = traceback.format_exc()
+                raise Exception(f"Error getting job description: \nTraceback:\n{tb_str}")
+        else:
+            return self.gpt_answerer.job.description
 
     def _get_job_recruiter(self):
         try:
@@ -141,7 +249,7 @@ class LinkedInEasyApplier:
             time.sleep(random.uniform(1.5, 2.5))
 
             #ToDo - Enable submit button when finished testing
-            DEBUG = False
+            DEBUG = EnvironmentKeys.get_key('DEBUG', True, True )
             if DEBUG:
                 print(f'SUBMIT APPLICATION IS DISABLED DURING DEBUGGING {datetime.datetime.now()}. Not applied for: Company: {self.gpt_answerer.job.company} Title: {self.gpt_answerer.job.title} ID:{self.gpt_answerer.job.id}')
                 self.gpt_answerer.job.set_application_status("Not Applied - DEBUG")
@@ -217,124 +325,90 @@ class LinkedInEasyApplier:
             file_name_with_timestamp = f"{file_name}_{timestamp}.{file_extension}"
         return  os.path.join(file_directory, file_name_with_timestamp)
 
-    #writing two copies of the same file - one is always the latest version, wihtout the timestamp
-    #another one is in the backup directory with a timestamp
-    def safe_save_file_with_backup(self, file_path, data, timestamp="", backup_dir = 'bak', overwrite = False ):
-        try:
-            bak_directory = os.path.join(os.path.dirname(file_path), backup_dir)
-            # Get the file name and extension
-            file_name, file_extension = os.path.splitext(os.path.basename(file_path))
-            # Generate a timestamp
-            if len(timestamp)==0:
-                timestamp = datetime.datetime.now().strftime("%Y%m%d.%H%M%S.%f")[:-3]
 
-            # Create a new file name with the timestamp
-            file_name_with_timestamp = f"{file_name}.{timestamp}{file_extension}"
-            bak_file_path = os.path.join(bak_directory, file_name_with_timestamp)
-            try:
-                # always keep only the latest version in the main directory - remove file if it exists
-                if not os.path.exists(bak_directory):
-                    os.makedirs(bak_directory)
-                # Check if the file exists
+    def _create_cover(self, job):
+        pass
 
-                if os.path.exists(file_path):
-                    if overwrite:
-                        os.remove(file_path)
-                        with open(file_path, "xb") as f:
-                            f.write(data)
-                else:
-                    with open(file_path, "xb") as f:
-                        f.write(data)
+    def _create_resume(self, job):
+        #def job_folder_name(dt, company, position, id):
+        #    return f'{dt}.{company}.{position}.{id}'
 
-                if os.path.exists(bak_file_path):
-                    if overwrite:
-                        os.remove(bak_file_path)
-                        with open(bak_file_path, "xb") as f:
-                            f.write(data)
-                else:
-                    with open(bak_file_path, "xb") as f:
-                        f.write(data)
+        def split_by_common_delimiters(text, delim = r'[,\-\s;:\\/()]+'):
+            # Use regular expression to split by spaces, commas, dashes, semicolons, and colons
+            # The pattern includes: space (\s), comma (,), dash (-), semicolon (;), colon (:)
+            parts = re.split(delim, text)
+            # Remove any empty strings from the resulting list
+            parts = [part for part in parts if part]
+            return parts
 
-                return file_name_with_timestamp
+        job.set_date_time()
+        #job.base_path = os.path.join("data_folder", "output", 'Jobs')
+        #base_path_applied = os.path.join(base_folder_path, 'JohnDoe')
+        #base_path_created = os.path.join(base_folder_path, 'JohnDoe')
 
-            #file operations exception
-            except Exception as e:
-                print(f'safe_save_file_with_backup::Failed saving file {file_path}. Exception:{e}')
-                return None
-
-        #all other exceptions
-        except Exception as e:
-            print(f'safe_save_file_with_backup::Failed file {file_path}. Exception:{e}')
-    def rename_and_move_file_if_exists(self, file_path, backup_dir = 'bak'):
-        # Get the file name and extension
-        file_name, file_extension = os.path.splitext(os.path.basename(file_path))
-        # Generate a timestamp
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Create a new file name with the timestamp
-        new_file_name = f"{file_name}_{timestamp}{file_extension}"
-        try:
-            # Check if the file exists
-            if os.path.exists(file_path):
-                # Create a 'bak' subdirectory if it doesn't exist
-                bak_directory = os.path.join(os.path.dirname(file_path), backup_dir)
-                if not os.path.exists(bak_directory):
-                    os.makedirs(bak_directory)
-
-                # Set the new file path in the 'bak' directory
-                new_file_path = os.path.join(bak_directory, new_file_name)
-
-                # Move and rename the file
-                shutil.move(file_path, new_file_path)
-                print(f"File '{file_path}' renamed to '{new_file_name}' and moved to '{backup_dir}/' directory.")
-        except Exception as e:
-            print(f"Exception while moving existing file '{file_path}' renamed to '{new_file_name}' and moved to '{backup_dir}/' directory. ")
-
-    def _create_and_upload_resume(self, element, job):
-        folder_path = 'generated_cv'
-        os.makedirs(folder_path, exist_ok=True)
-        pdf_path = 'pdf'
-        html_path = 'html'
-        backup_path = 'bak'
+        if job.abbreviated_position is None or len(job.abbreviated_position)==0:
+            printyellow(f'Warning: abbreviated position should have been set already. Jobid: {job.id}')
+            c, p = self.gpt_answerer._sanitize_and_abbreviate_position(position=job.title, company_name=job.company)
+            job._abbreviated_position = p
+            job.truncated_co_name = c
         try:
             name = self.resume_generator_manager.resume_generator.resume_object.personal_information.name
             surname = self.resume_generator_manager.resume_generator.resume_object.personal_information.surname
-            if len(job.id)>0:
-                link_id = job.id
-            else:
-                link_id = job.link.split('/')[-2]
-                job.id = link_id
 
-            if not os.path.exists(os.path.join(folder_path, pdf_path)):
-                os.makedirs(os.path.join(folder_path, pdf_path))
-            if not os.path.exists(os.path.join(folder_path, html_path)):
-                os.makedirs(os.path.join(folder_path, html_path))
+            #job.abbreviated_position = self.gpt_answerer._sanitize_and_abbreviate_position(job.title)
+            #job.truncated_company_name = split_by_common_delimiters(job.company)[0]
 
-            file_path_pdf = os.path.join(folder_path, pdf_path, f"{name}_{surname}.{link_id}.pdf")
-            file_path_html = os.path.join(folder_path, html_path, f"{name}_{surname}.{link_id}.html")
+            #job._user_path = os.path.join(job.base_path,
+            #                              job_folder_name(job.get_dt_string(), job._truncated_company_name, job._abbreviated_position, job.id) )
 
-            #Note: pdf_base64 has a side effect of saving html resume file
-            file_name_with_timestamp = self.safe_save_file_with_backup(file_path_pdf, base64.b64decode(self.resume_generator_manager.pdf_base64(job_description_text=job.description, html_file_name=file_path_html, delete_html_file=False)))
-            #previous call has created a file_path_html. Now we need to make a copy of it.
-            print(f'saved pdf file {file_name_with_timestamp}')
-            fn, ext = os.path.splitext(file_name_with_timestamp)
-            html_path_bak = os.path.join(folder_path, html_path, backup_path)
-            html_path_back_file = os.path.join(html_path_bak, f'{fn}.html')
-            try:
-                if file_name_with_timestamp is not None:
-                    if not os.path.exists(html_path_bak):
-                        os.makedirs(html_path_bak)
-                    shutil.copyfile(file_path_html, html_path_back_file)
+            #job_path = os.path.join(job.base_path, job.resume_path)
 
-            except Exception as e:
-                print(f'Exception while copying html file {file_name_with_timestamp}. Error {e}')
+            os.makedirs(job.path, exist_ok=True)
 
+            #create resume
+            # Note: pdf_base64 has a side effect of saving html resume file
+            _file_name = f'{name}_{surname}'
+            job.resume.set_docset(docset_name='resume', path=job.path, name=f'{_file_name}.Resume')
+            job.cover.set_docset(docset_name='cover', path=job.path, name=f'{_file_name}.Cover')
+            job.job_docset.set_docset(docset_name='job', path=job.path, name=f'{job.id}.{job._truncated_company_name}.{job._abbreviated_position}')
 
-            #self.rename_and_move_file_if_exists(file_path_pdf)
+            pdf_b64 = self.resume_generator_manager.pdf_base64(job_description_text=job.description, html_file_name=job.resume.html, delete_html_file=False)
+            pdf_data = base64.b64decode(pdf_b64)
+            with open(job.resume.pdf, "xb") as f:
+                f.write(pdf_data)
+                job.resume.created=True
+            with open(job.job_docset.txt, 'w') as f:
+                f.write(f'link: {job.link}\n\n'
+                        f'**SUMMARY**\n{job.job_description_summary}\n\n**FULL DESCRIPTION**\n{job.description}')
+                job.job_docset.created = True
+            with open(os.path.join(job.path,f'linkedin_job_{job.id}.url'), 'w') as f:
+                f.write(f"[InternetShortcut]\nURL={job.link}\n")
+        except Exception as e:
+            print(f'Exception in _create_resume() for job id {job.id}. Error:{e}')
+
+        return job.resume.pdf
+
+    def _upload_resume(self, element, job):
+        try:
+            element.send_keys(os.path.abspath(job.file_path_pdf))
+            time.sleep(2)
+        except Exception:
+            tb_str = traceback.format_exc()
+            raise Exception(f"Upload failed: \nTraceback:\n{tb_str}")
+
+    def _create_and_upload_resume(self, element, job):
+        # if job.pdf_file is None or len(job.pdf_file)==0 or os.path.exists(job.pdf_file)==False:
+        if not job.resume.created:
+            pdf_file_path = self._create_resume(job)
+            if pdf_file_path is None or len(pdf_file_path)==0:
+                job.resume.created=True
+        else:
+            pdf_file_path = job.resume.pdf
+        #self.rename_and_move_file_if_exists(file_path_pdf)
             #with open(file_path_pdf, "xb") as f:
             #    f.write(base64.b64decode(self.resume_generator_manager.pdf_base64(job_description_text=job.description)))
-            element.send_keys(os.path.abspath(file_path_pdf))
-            job.pdf_path = os.path.abspath(file_path_pdf)
-            job.html_path=os.path.abspath(html_path_back_file)
+        try:
+            element.send_keys(os.path.abspath(pdf_file_path))
             time.sleep(2)
         except Exception:
             tb_str = traceback.format_exc()
@@ -358,7 +432,7 @@ class LinkedInEasyApplier:
             c.save()
             element.send_keys(letter_path)
             try:
-                name = self.resume_generator_manager.resume_generator.resume_object.personal_information.name
+                name = self.resume_generator_manager.resume_generator.resume_object.personal_information.docset_name
                 surname = self.resume_generator_manager.resume_generator.resume_object.personal_information.surname
                 shutil.move(letter_path.split('\\')[-1], os.path.join(folder_path, f'{name}_{surname}.{self.gpt_answerer.job.id}.Cover.pdf'))
             except Exception as e:
