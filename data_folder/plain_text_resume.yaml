@@ -1,312 +1,101 @@
 personal_information:
-  name: "Alexander"
-  surname: "Liss"
-  date_of_birth: "08/05/1966"
-  country: "USA"
-  city: "Burlington, MA"
-  address: "63 Mountain Rd"
-  phone_prefix: "+1"
-  phone: "(646) 867-0808"
-  email: "***REMOVED***"
-  github:
-  linkedin: "https://www.linkedin.com/in/alexander-l-0a0758326/"
-  years_technical_experience: "20+"
-  years_mgmt_experience: "15+"
+  name: "[Your Name]"
+  surname: "[Your Surname]"
+  date_of_birth: "[DD/MM/YYYY]"
+  country: "[Your Country]"
+  city: "[Your City]"
+  address: "[Your Address]"
+  phone_prefix: "[Your Phone Prefix]"
+  phone: "[Your Phone Number]"
+  email: "[Your Email Address]"
+  github: "[Your GitHub Profile URL]"
+  linkedin: "[Your LinkedIn Profile URL]"
 
 education_details:
-  - degree: "Doctor of Philosophy (PhD)"
-    university: "Tufts Univiersity, MA"
-    gpa: "3.8/4"
-    graduation_year: "2014"
-    field_of_study: "Computer Science"
+  - degree: "[Your Degree]"
+    university: "[Your University]"
+    gpa: "[Your GPA]"
+    graduation_year: "[Year of Graduation]"
+    field_of_study: "[Your Field of Study]"
     exam:
-  - degree: "Master of Business Administration (MBA)"
-    university: "Babson College, MA"
-    gpa: "3.85/4"
-    graduation_year: "2006"
-    field_of_study: ""
-    exam:
-  - degree: "Master of Science"
-    university: "St. Petersburg State Univ, Russia"
-    gpa: "3.85/4"
-    graduation_year: "1988"
-    field_of_study: "Quantum Chemistry, Physics"
-    exam:
-  - degree: "Bachelor of Science"
-    university: "St. Petersburg State Univ, Russia"
-    gpa: "3.85/4"
-    graduation_year: "1986"
-    field_of_study: "Computational Chemistry, Physics"
-    exam:
+      [Course Name 1]: "[Grade]"
+      [Course Name 2]: "[Grade]"
+      [Course Name 3]: "[Grade]"
+      [Course Name 4]: "[Grade]"
+      [Course Name 5]: "[Grade]"
 
 experience_details:
-  - position: "L1"
-    company: "HyperC"
-    employment_period: "06/2023 - Present"
-    location: "San Francisco Bay, CA"
-    industry: "AI ML"
-    summary: "Leading a global distributed team dedicated to creating a state-of-the-art scalable AI data and networking platform serving both B2B and B2C customers. Ensured full compliance with government regulations, privacy laws, and ethical standards"
+  - position: "[Your Job Title]"
+    company: "[Company Name]"
+    employment_period: "[Start Date] - [End Date]"
+    location: "[Location]"
+    industry: "[Industry]"
     key_responsibilities:
-      - "Led an engineering for a startup specializing in AI developemnt for e-commerce and logistics industry and software development with a focus on data science, AI, and ML Engineering"
-      - "Provided ML Engineering consultations for 10+ companies, enhancing their software capabilities with secure, decentralized solutions"
-      - "Developed ML Platform, integrated cutting-edge technology to meet client needs and drive industry innovation"
+      - responsibility_1: "[Key Responsibility 1]"
+      - responsibility_2: "[Key Responsibility 2]"
+      - responsibility_3: "[Key Responsibility 3]"
     skills_acquired:
-      - "Data Science"
-      - "AI"
-      - "genAI"
-      - "Responsible and Ethical AI management"
-      - "Software engineering"
-      - "Consultancy"
-
-  - position: "Head of Data Science, CX Lab"
-    company: "Google"
-    employment_period: "12/2021 - 07/2023"
-    location: "Mountain View, CA"
-    industry: "Online Advertising and Search"
-    summary: "Provided strategic leadership in driving a data-driven customer segmentation initiative, improving targeting and retention, while fostering diversity and guiding data science teams to significantly enhance insights and support key organizational decision-making."
-    key_responsibilities:
-      - "Collaborated with marketing and product teams to build a clear vision for a data-driven customer segmentation project. Communicated the strategy internally and externally, aligning feedback, performance reviews, and resource allocation with the company broader goals. The successful implementation of the project resulted in a 12.5% improvement in customer targeting accuracy and a 3.6% increase in customer retention."
-      - "Mentored and coached a team of data scientists to enhance their technical proficiency and foster a culture of continuous self-development. Encouraged research initiatives and stretch projects to explore innovative data analysis techniques. The team professional growth led to a 40% increase in data-driven insights, driving strategic decision-making across the organization"
-      - "Developed multiple software components including MQTT packet analysis library, Falco adapter, and RML monitor in Prolog"
-    skills_acquired:
-      - "Team Management"
-      - "Leadership"
-      - "Software development"
-      - "Data Science"
-      - "Customer analytics"
-      - "Marketing"
-      - "Python programming"
-      - "SQL programming"
-      - "Critical thinking"
-
-  - position: "L2"
-    company: "Tensorsoft"
-    employment_period: "03/2016 - 12/2021"
-    location: "Mountain View, CA"
-    industry: "Data Science"
-    summary: "Led the development and integration of customer segmentation for search relevancy and key software tools for a recommendation engine, driving enhanced user experience and contributing to critical development initiatives"
-    key_responsibilities:
-      - "Developed and integrated customer segmentation for search relevancy"
-      - "Developed and maintained a critical software tools for recommendation engine"
-      - "Played an integral role in the development team"
-    skills_acquired:
-      - "Search engine"
-      - "Software development"
-      - "Recommender Systems"
-      - "Customer segmentation"
-      - "Negotiations"
-      - "Data Analysis"
-      - "Statistics"
-  - position: "L1"
-    company: "Keenetix"
-    employment_period: "07/2005 - 03/2016"
-    location: "Salem, NH"
-    industry: "IT and Data Science"
-    summary: "Led and motivated a global engineering and data science team to deliver scalable machine learning solutions for regulated industries, government, and NASA, driving real-time business decisions by integrating multi-spectral remote sensing data with health and climate records for actionable insights and risk assessments."
-    key_responsibilities:
-      - "Built, lead, and motivated a global distributed engineering team of managers, engineers, and data scientists delivering scalable machine learning solutions in multi-spectral remote sensing for regulated industries, government, and NASA with a focus on customer needs"
-      - "Created technical solutions based on sound engineering principals to derive actionable insights and to facilitate business decision-making in real time, by merging GIS, multi-spectral imagery, Lidar, and SAR satellite data with health and climate records to create vulnerability scores and risk maps for WHO."
-      - "Actively promoted data-driven decision-making under strict constraints of medical data privacy. Provided oversight and direction for the design, development, and evaluation of predictive models and advanced algorithms. Identified new opportunities, prioritized initiatives that maximized business value and provided actionable insights by using algorithmic, statistical, visualization, and data mining techniques."
-    skills_acquired:
-      - "Agile Methodologies"
-      - "AI Governance"
-      - "AWS"
-      - "Big Data"
-      - "C#"
-      - "Cloud Platforms"
-      - "Data Ethics"
-      - "Data Governance"
-      - "GDPR"
-      - "HIPAA"
-      - "Programming"
-      - "Project Management"
-      - "Python"
-      - "Software development"
-      - "Software development"
-      - "SQL"
-      - "Statistics"
-      - "Team Management"
-
-  - position: "Principal Engineer"
-    company: "Digimarc"
-    employment_period: "2002-07/2005"
-    location: "Burlington, MA"
-    industry: "IT and Data Science"
-    summary: ""
-    key_responsibilities:
-    skills_acquired:
-      - "C#"
-      - "Python"
-      - "SQL"
-      - "Cloud Platforms"
-      - "AWS"
-      - "Software development"
-      - "Agile Methodologies"
-      - "Data Ethics"
-      - "Data Governance"
-      - "Programming"
+      - "[Skill 1]"
+      - "[Skill 2]"
+      - "[Skill 3]"
 
 projects:
+  - name: "[Project Name]"
+    description: "[Brief Description of the Project]"
+    link: "[Project URL]"
+  - name: "[Project Name]"
+    description: "[Brief Description of the Project]"
+    link: "[Project URL]"
 
 achievements:
-  - name: "Winner of multiple public data science competitions"
-    description: "Achieved Kaggle Master® designation, Prize Winner, multiple Team and Top 10 awards (top 1% finish in several machine learning competitions with several thousand participants each"
-  - name: "Multiple patents and peer-reviewed publications"
-    description: "Multiple patents and publications in peer-reviewed indexed scientific journals on topics of stochastic process modeling, forecasting, decision support framework, disease signatures, statistical analysis, and environmental health."
-  - name: "Multiple Recognition Awards"
-    description: "Received multiple Key Contributor Awards, Team Work Appreciation Awards, Spotlight Awards"
-  - name: "NSF Grant and Award"
-    description: "Received National Science Foundation Grants and Awards, presented at multiple international scienctific conferences"
+  - name: "[Achievement Title]"
+    description: "[Brief Description of the Achievement]"
+  - name: "[Achievement Title]"
+    description: "[Brief Description of the Achievement]"
 
 certifications:
-  - "Chartered Financial Analyst"
-  - "Certified Forensic Financial Analyst"
+  - "[Certification Name]"
 
 languages:
-  - language: "English"
-    proficiency: "Fluent"
-  - language: "Russian"
-    proficiency: "Native"
+  - language: "[Language Name]"
+    proficiency: "[Proficiency Level]"
+  - language: "[Language Name]"
+    proficiency: "[Proficiency Level]"
 
 interests:
-  - "Full-Stack Development"
-  - "Software Architecture"
-  - "Statistics"
-  - "Artificial Intelligence"
-  - "Cloud Technologies"
+  - "[Interest 1]"
+  - "[Interest 2]"
+  - "[Interest 3]"
+  - "[Interest 4]"
+  - "[Interest 5]"
 
 availability:
-  notice_period: "2 weeks"
+  notice_period: "[Notice Period]"
 
 salary_expectations:
-  salary_range_usd:
+  salary_range_usd: "[Expected Salary Range in USD]"
 
 self_identification:
-  gender: "Male"
-  pronouns: "He/His"
-  veteran: "No"
-  disability: "No"
-  ethnicity: "white"
+  gender: "[Gender]"
+  pronouns: "[Pronouns]"
+  veteran: "[Veteran Status]"
+  disability: "[Disability Status]"
+  ethnicity: "[Ethnicity]"
 
 legal_authorization:
-  eu_work_authorization: "No"
-  us_work_authorization: "Yes"
-  requires_us_visa: "No"
-  requires_us_sponsorship: "No"
-  requires_eu_visa: "Yes"
-  legally_allowed_to_work_in_eu: "No"
-  legally_allowed_to_work_in_us: "Yes"
-  requires_eu_sponsorship: "Yes"
+  eu_work_authorization: "[Yes/No]"
+  us_work_authorization: "[Yes/No]"
+  requires_us_visa: "[Yes/No]"
+  requires_us_sponsorship: "[Yes/No]"
+  requires_eu_visa: "[Yes/No]"
+  legally_allowed_to_work_in_eu: "[Yes/No]"
+  legally_allowed_to_work_in_us: "[Yes/No]"
+  requires_eu_sponsorship: "[Yes/No]"
 
 work_preferences:
-  remote_work: "Yes"
-  in_person_work: "Yes"
-  open_to_relocation: "Yes"
-  willing_to_complete_assessments: "Yes"
-  willing_to_undergo_drug_tests: "Yes"
-  willing_to_undergo_background_checks: "Yes"
-
-skills:
-  - category: "technical"
-    skill_lst: "Programming, Python, SQL, R, C++, Java, Machine learning, deep learning, Tensorflow, Keras, Scikit-Learn, Natural Language Processing (NLP), Data analysis, statistics, Cloud platforms, AWS, Google Cloud, Big data, Hadoop, Spark"
-  - category: "leadership_and_management"
-    skill_lst: "Strategic thinking, Project management, Team leadership, Talent development, Agile methodologies"
-  - category: "business_domain_knowledge"
-    skill_lst: "Industry-specific expertise, Business acumen, Financial analysis, Understanding AI applications in various sectors"
-  - category: "soft"
-    skill_lst: "Critical thinking, Problem-solving, Creativity, Adaptability and resilience, Effective communication, Data storytelling, Executive presence, Stakeholder management, Analytical reasoning, Creative problem-solving"
-  - category: "AI"
-    skill_lst: "prompt engineering, AI literacy (understanding concepts and terminology), Human-AI interaction, Ethical AI development and implementation, AI ethics and governance, Generative AI, genAI"
-  - category: "ethics_governance"
-    skill_lst: "data ethics, data governance, privacy regulations, HIPAA, GDPR, CCPA"
-
-
-#resume_raw_html:
-#  name_header: "<span style='font-variant: small-caps'><b>Alexander Liss</b></span> | +1 (646) 867 0808 | ***REMOVED***"
-#  career_timeline: '
-#            <table width="720" cellpadding="0" cellspacing="0">
-#            <col width="140"/>
-#            <col width="140"/>
-#            <col width="240"/>
-#            <col width="100"/>
-#            <col width="75"/>
-#            <tr>
-#                <td align="left"><b><i>HyperC</i></b></td>
-#                <td align="left"><i>AI Strategy and Product, Data Science, ML Engineering</i></td>
-#                <td align="left"><b>Manager AIML Engineering</b></td>
-#                <td align="right">San Francisco Bay, CA</td>
-#                <td align="right">2023-2024</td>
-#            </tr>
-#            <tr>
-#                <td align="left"><b><i>Google</i></b></td>
-#                <td align="left"><i>Data Science, Engineering</i></td>
-#
-#                <td align="left"><b>Head of Data Science, CX lab</b></td>
-#               <td align="right">Mountain View, CA</td>
-#                <td align="right">2021-2023</td>
-#            </tr>
-#            <tr>
-#                <td align="left"><b><i>Tensorsoft</i></b></td>
-#
-#                <td align="left"><i>Data Science, AIML, Eng</i></td>
-#                <td align="left"><b>Co-founder, CTO and Lead Data Science Engineer</b></td>
-#                <td align="right">Mountain View, CA</td>
-#                <td align="right">2016-2021</td>
-#            </tr>
-#            <tr>
-#                <td align="left"><b><i>Keenetix</i></b></td>
-#                <td align="left"><i>Data Science, Analytics</i></td>
-#                <td align="left"><b>Product Manager, Data Science</b></td>
-#                <td align="right">Salem, NH</td>
-#                <td align="right">2010-2016</td>
-#            </tr>
-#            <tr>
-#                <td align="left"><b><i>Keenetix</i></b></td>
-#                <td align="left"><i>Data Science, Analytics</i></td>
-#                <td align="left"><b>Project Dev Manager, Data Science</b></td>
-#                <td align="right">Salem, NH</td>
-#                <td align="right">2008-2010</td>
-#            </tr>
-#            <tr>
-#                <td align="left"><b><i>Keenetix</i></b></td>
-#                <td align="left"><i>Data Science, Analytics</i></td>
-#                <td align="left"><b>Lead Dev Engineer, Data Science</b></td>
-#                <td align="right">Salem, NH</td>
-#                <td align="right">2005-2008</td>
-#            </tr>
-#            <tr>
-#                <td align="left"><b><i>Digimarc/Polaroid</i></b></td>
-#                <td align="left"><i>Image Analysis, Fraud Detection</i></td>
-#                <td align="left"><b>Principal Engineer, Data Eng Lead</b></td>
-#                <td align="right">Burlington, MA</td>
-#                <td align="right">2002-2005</td>
-#            </tr>
-#            <tr>
-#                <td align="left"><b><i>Comverse Technology</i></b></td>
-#                <td align="left"><i>DSP, Speech Recognition</i></td>
-#                <td align="left"><b>Principal Software Eng</b></td>
-#                <td align="right">Wakefield, MA</td>
-#                <td align="right">1999-2002</td>
-#            </tr>
-#        </table>'
-
-#education_summary: """
-#    <ul class='education-summary'>
-#        <li><p align='justify'><b>Doctor of Philosophy (PhD)</b> Tufts University, MA</p></li>
-#        <li><p align='justify'><b>MBA</b> <i>Summa Cum Laude</i>, Babson College, MA</p></li>
-#        <li><p align='justify' class='education-summary'><b>Master of Science (MSc)</b> St.Petersburg, Russia</p></li>
-#    </ul>
-#"""
-#  career_summary: "<b>I am a seasoned AI/ML executive who drives R&amp;D and innovative solutions through visionary leadership, broad technical expertise, and strategic collaboration</b>. Known for loyalty, impactful results, and a supportive, even-tempered approach for the last two dozen years I deliver sustainable growth with adaptability and continuous learning, fostering and nurturing high-performing internationally distributed teams, extensive collaboration, and x-functional alignment. </p><p align='left' class='career-summary'>During my entire career I have been translating business requirements into technical definitions, leading advanced R&amp;D projected and converting it to ground breaking products. I am proficient in the Artificial Intelligence, Machine Learning, Database, Software and Networking technology. I have a proven track record in building robust product analytics, data science, and developing cutting-edge ML algorithms such as computer vision, NLP, classification, supervised/unsupervised learning, and anomaly detection to deliver business impact by solving customer problems and growing revenue. I am skilled in data stewardship,  business analytics, and building AI as-a-service in the cloud. I have a proven success in delivering impactful, value-adding solutions, overseeing full product development cycles, and meeting critical milestones. I have a deep passion for research, tolerance for ambiguity, and a positive &quot;can do&quot; attitude with a strong business orientation.</p>
-#    <p align='left' class='career-summary'>
-#      As you can see below my track record includes over <b>25
-#      years of progressive technical and business experience</b>
-#      delivering innovative, business-defining products, and <b>18 years of successful team management and engineering leadership</b>
-#      specifically focusing on building and nurturing diverse,
-#      geographically distributed teams of engineers and scientists. I
-#      demonstrated ability to build a common culture based on trust,
-#      ownership and accountability. I excel in team building, resource
-#      orchestration, and aligning teams with strategic goals to ensure
-#      seamless execution, building a great value for customers and
-#      increasing revenue.</p>"
-
+  remote_work: "[Yes/No]"
+  in_person_work: "[Yes/No]"
+  open_to_relocation: "[Yes/No]"
+  willing_to_complete_assessments: "[Yes/No]"
+  willing_to_undergo_drug_tests: "[Yes/No]"
+  willing_to_undergo_background_checks: "[Yes/No]"
