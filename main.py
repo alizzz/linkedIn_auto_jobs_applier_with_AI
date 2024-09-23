@@ -10,6 +10,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import WebDriverException, TimeoutException
 from lib_resume_builder_AIHawk import Resume,StyleManager,FacadeManager,ResumeGenerator
 from src.utils import chromeBrowserOptions
+from src.utils import printcolor, printyellow, printred
+from src.utils import EnvironmentKeys
 from src.gpt import GPTAnswerer
 from src.linkedIn_authenticator import LinkedInAuthenticator
 from src.linkedIn_bot_facade import LinkedInBotFacade
@@ -23,6 +25,7 @@ sys.stderr = open(os.devnull, 'w')
 
 class ConfigError(Exception):
     pass
+
 
 class ConfigValidator:
     @staticmethod
@@ -44,6 +47,7 @@ class ConfigValidator:
         parameters = ConfigValidator.validate_yaml_file(config_yaml_path)
         required_keys = {
             'remote': bool,
+            'easy_apply': bool,
             'experienceLevel': dict,
             'jobTypes': dict,
             'date': dict,
@@ -124,7 +128,7 @@ class FileManager:
         return next((file for file in at_path.iterdir() if name_containing.lower() in file.name.lower() and file.suffix.lower() == with_extension.lower()), None)
 
     @staticmethod
-    def validate_data_folder(app_data_folder: Path, required_dict: dict = None) -> tuple:
+    def validate_data_folder(app_data_folder: Path, required_dict: dict = None, jobs_folder: str=None) -> tuple:
         if not app_data_folder.exists() or not app_data_folder.is_dir():
             raise FileNotFoundError(f"Data folder not found: {app_data_folder}")
 
@@ -141,6 +145,7 @@ class FileManager:
 
         output_folder = app_data_folder / 'output'
         output_folder.mkdir(exist_ok=True)
+
         print(f"loading config files: {','.join(required_dict.values())}")
         return (app_data_folder / required_dict["secrets"], app_data_folder / required_dict["config"], app_data_folder / required_dict["plain_resume"], output_folder)
 
@@ -189,6 +194,19 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
         bot.set_job_application_profile_and_resume(job_application_profile_object, resume_object)
         bot.set_gpt_answerer_and_resume_generator(gpt_answerer_component, resume_generator_manager)
         bot.set_parameters(parameters)
+
+        _jobs_folder = parameters['jobs']
+        user_dir = 'name_s'
+        try:
+            user_dir = f'{bot.resume.personal_information.name}_{bot.resume.personal_information.surname[0]}'
+        except:
+            pass
+        jobs_folder = Path(parameters['outputFileDirectory'], _jobs_folder if _jobs_folder is not None else 'Jobs', user_dir)
+        jobs_folder.mkdir(exist_ok=True)
+
+        parameters['outputJobsDirectory'] = jobs_folder.__str__()
+        os.environ["OUTPUT_JOBS_DIRECTORY"]=jobs_folder.__str__()
+
         bot.start_login()
         bot.start_apply()
     except WebDriverException as e:
@@ -202,22 +220,33 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
 @click.option('--plain', type=str, default="plain_text_resume.yaml", help="Path to default plain text resume yaml file")
 @click.option('--secret', type=str, default="secrets.yaml", help="Path to default plain text resume yaml file")
 @click.option('--config', type=str, default="config.yaml", help="Path to default plain text resume yaml file")
-def main(resume: Path = None, plain: str = None, secret: str = None, config: str = None):
+@click.option('--jobs', type=str, default=r'Jobs', help=r'Path to the jobs output folder. Default value `data_folder\output\Jobs`')
+@click.option('--data_folder', type=str, default=r'data_folder', help='Path to the output data folder. Default value `data_folder`')
+@click.option('--debug', type=str, default='False', help='is application being debugged')
+def main(resume: Path = None, plain: str = None, secret: str = None, config: str = None, jobs: str=None, data_folder: str=None, debug:str=None):
     try:
-        data_folder = Path("data_folder")
+        data_folder = Path(data_folder)
         config_dict = {
             'plain_resume': plain,
             'secrets': secret,
-            'config': config}
+            'config': config
+        }
 
-        secrets_file, config_file, plain_text_resume_file, output_folder = FileManager.validate_data_folder(data_folder, config_dict)
+        secrets_file, config_file, plain_text_resume_file, output_folder = FileManager.validate_data_folder(data_folder, config_dict, jobs_folder=jobs)
         
         parameters = ConfigValidator.validate_config(config_file)
         email, password, openai_api_key = ConfigValidator.validate_secrets(secrets_file)
         
         parameters['uploads'] = FileManager.file_paths_to_dict(resume, plain_text_resume_file)
-        parameters['outputFileDirectory'] = output_folder
-        
+        parameters['outputFileDirectory'] = output_folder.__str__()
+        os.environ['OUTPUT_FILE_DIRECTORY'] = output_folder.__str__()
+
+        parameters['jobs'] = jobs
+
+        os.environ['DEBUG']=debug
+        parameters['DEBUG']=debug
+        printcolor(f'DEBUG flag is set to {debug}','Red')
+
         create_and_run_bot(email, password, parameters, openai_api_key)
     except ConfigError as ce:
         print(f"Configuration error: {str(ce)}")
