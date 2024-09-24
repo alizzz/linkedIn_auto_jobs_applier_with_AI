@@ -58,13 +58,13 @@ class LinkedInEasyApplier:
             raise Exception(f"Error loading questions data from JSON file: \nTraceback:\n{tb_str}")
     def has_been_processed(self, job: Job):
         res = False
-        for root, dirs, files in os.walk(job.base_path):
+        for root, dirs, files in os.walk(job.base_loc_path):
             for subfolder in dirs:
                 # Check if subfolder name matches the pattern
                 if subfolder.split('.')[-1]==job.id:
                     res = True
-                    is_resume = os.path.exists(os.path.join(job.base_path, subfolder,job.resume.file_name))
-                    is_job_desc = os.path.exists(os.path.join(job.base_path, subfolder,job.job_docset.file_name))
+                    is_resume = os.path.exists(os.path.join(job.base_loc_path, subfolder, job.resume.file_name))
+                    is_job_desc = os.path.exists(os.path.join(job.base_loc_path, subfolder, job.job_docset.file_name))
                     if not( is_resume and is_job_desc):
                         resume_warning_string = '' if is_resume else 'Resume file does not'
                         job_desc_warning_string = '' if is_job_desc else 'Job description file does not'
@@ -93,9 +93,9 @@ class LinkedInEasyApplier:
             #gpt_answerer.set_job(job) uses job description to determine pay range. It has to be called prior to set_job()
             job.skills = self._get_skills_from_post()
             self.gpt_answerer.set_job(job)
-            printcolor(f'About to start creating resume for job id {job.id} in {job.get_base_path()}\\{job.resume_path}', 'blue')
+            printcolor(f'About to start creating resume for job id {job.id} in {job.get_base_loc_path()}\\{job.resume_path}', 'blue')
             self._create_resume(job)
-            printcolor(f'Finished creating resume for job id {job.id} in {job.get_base_path()}\\{job.resume_path}', 'green')
+            printcolor(f'Finished creating resume for job id {job.id} in {job.get_base_loc_path()}\\{job.resume_path}', 'green')
             self._create_cover(job)
 
             if job.is_easyApply:
@@ -113,7 +113,7 @@ class LinkedInEasyApplier:
                             f.write(job.link)
                     print(f'added .applied to jobid:{job.id}, path:{job.path}')
                 except Exception as e:
-                    print(f"Failed saving '.applied' file for {job.base_path}")
+                    print(f"Failed saving '.applied' file for {job.base_loc_path}")
             else:
                 print(f'Job {job.id} for {job.title} at {job.company} in {job.location}({job.office_policy}) is not an Easy Apply. Please review manually')
                 #job.applied="No"
@@ -370,14 +370,14 @@ class LinkedInEasyApplier:
                 utils.printred(f'Exception while getting ready to create a resume for jobid {job.id}. Error {e}')
                 utils.printred(traceback.format_exc())
 
-            print(f'About to create a resume for {job.description} jobid: {job.id}. Pdf file:{job.resume.pdf}, html file: {job.resume.html}, job file: {job.job_docset.txt}')
+            print(f'About to create a resume for jobid: {job.id}. Pdf file:{job.resume.pdf}, html file: {job.resume.html}')
             pdf_b64 = self.resume_generator_manager.pdf_base64(job_description_text=job.description, html_file_name=job.resume.html, delete_html_file=False)
             pdf_data = base64.b64decode(pdf_b64)
 
             with open(job.resume.pdf, "xb") as f:
                 f.write(pdf_data)
                 job.resume.created=True
-            with open(job.job_docset.txt, 'w') as f:
+            with open(job.job_docset.txt, 'w', encoding='utf-8') as f:
                 f.write(f'link: {job.link}\n\n'
                         f'**SUMMARY**\n{job.job_description_summary}\n\n**FULL DESCRIPTION**\n{job.description}')
                 job.job_docset.created = True
@@ -583,7 +583,7 @@ class LinkedInEasyApplier:
         select.select_by_visible_text(text)
 
     def _save_questions_to_json(self, question_data: dict) -> None:
-        output_file = 'answers.json'
+        output_file = os.path.join(EnvironmentKeys.get_key('OUTPUT_FILE_DIRECTORY', False, r'data_folder\output\Jobs'),'answers.json')
         question_data['question'] = self._sanitize_text(question_data['question'])
         try:
             try:

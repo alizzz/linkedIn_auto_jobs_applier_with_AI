@@ -1,6 +1,7 @@
 import os
 import random
 import time
+import re
 
 from selenium import webdriver
 
@@ -88,6 +89,34 @@ def chromeBrowserOptions():
 
     return options
 
+#alias make_valid_path(...)
+def make_valid_os_path_string(path_string: str, invalid_chars: str=r'[<>:"/\\|?*,\s+]', repl: str='_'):
+    return make_valid_path(path_string, invalid_chars, repl)
+def make_valid_path(path_string: str, invalid_chars: str=r'[<>:"/\\|?*,\s+]', repl: str='_') -> str:
+    """
+    Converts a given string into a valid folder name by replacing or removing invalid characters.
+    Invalid characters are replaced with underscores, and leading/trailing spaces are trimmed.
+
+    Args:
+        path_string (str): The input folder name string.
+
+    Returns:
+        str: A sanitized, valid folder name.make_valid_path
+    """
+    # Define characters not allowed in folder names across major operating systems
+    #invalid_chars = r'[<>:"/\\|?*]'
+
+    # Replace invalid characters with underscores
+    valid_name = re.sub(invalid_chars, repl=repl, string=path_string)
+
+    # Trim leading and trailing spaces
+    valid_name = valid_name.strip()
+
+    # Optionally: Replace multiple underscores with a single underscore
+    valid_name = re.sub(pattern=f'{repl}+', repl=repl, string=valid_name)
+
+    return valid_name
+
 def printcolor(text, color="none", intensity="none"):
     RESET = "\033[0m"
     colors = {
@@ -132,7 +161,25 @@ class EnvironmentKeys:
         self.disable_description_filter = self._read_env_key_bool("DISABLE_DESCRIPTION_FILTER")
 
     @staticmethod
-    def get_key(key:str, is_bool=False, key_default=None):
+    def set_key(key:str, value:str):
+        if value.lower() in ['y','yes', '1', 'on', 't','true', 'n','no', '0', 'off', 'f','false']:
+            EnvironmentKeys._set_key(value.lower() in ['y','yes', 't','true', '1', 'on'])
+        else:
+            EnvironmentKeys._set_key(value)
+
+    @staticmethod
+    def _set_key(key, value):
+        os.environ[key]=value.__str__()
+
+    #is_bool parameter is not used. It is there for backward compatibility to an old version.
+    @staticmethod
+    def get_key(key:str, is_bool=False, default=None):
+        val = os.getenv(key, default=default)
+        if is_bool or val.lower() in ['y','yes', '1', 'on', 't','true', 'n','no', '0', 'off', 'f','false']:
+            return val.lower() in ['y','yes', '1', 'on', 't','true']
+        return val
+
+    def get_key_old(key:str, is_bool=False, key_default=None):
         key_d_str = ''
         key_d_bool = False
         if is_bool:
@@ -155,3 +202,6 @@ class EnvironmentKeys:
             if key_true: return key_true
             if key_false: return key_false
         else: return default_value if default_value is not None else False
+
+
+

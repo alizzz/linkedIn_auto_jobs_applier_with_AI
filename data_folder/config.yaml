@@ -1,19 +1,17 @@
-remote: true
-
+remote: false
 easy_apply: false
-
 experienceLevel:
  internship: false
  entry: false
  associate: false
- mid-senior level: false
+ mid-senior level: true
  director: true
  executive: true
 
 jobTypes:
  full-time: true
- contract: false
- part-time: false
+ contract: true
+ part-time: true
  temporary: false
  internship: false
  other: false

@@ -14,21 +14,12 @@ import src.utils as utils
 from src.utils import EnvironmentKeys
 from src.utils import printcolor, printyellow, printred
 from src.job import Job
+from src.utils import make_valid_path, make_valid_os_path_string
 from src.linkedIn_easy_applier import LinkedInEasyApplier
 from lib_resume_builder_AIHawk.config import global_config
 
 from urllib.parse import quote
 
-def make_valid_path(path_string):
-    # Define the invalid characters for file paths
-    # On Windows: \ / : * ? " < > |
-    # On Unix-like systems, only '/' is invalid
-    if os.name == 'nt':  # Windows
-        # Replace invalid characters with underscores
-        return re.sub(r'[<>:"/\\|?*]', '_', path_string)
-    else:  # Unix-like (Linux, macOS)
-        # Replace '/' with underscores
-        return path_string.replace('/', '_')
 
 
 class JobTile:
@@ -192,14 +183,48 @@ class LinkedInJobManager:
             "hong Kong": 4021079441,
             "australia": 3996465737
         }
+        metro_locations = {
+            "boston_": "Greater Boston",
+            "new_york_": "New York Metropolitan Area",
+            "los_angeles_": "Los Angeles Metropolitan Area",
+            "chicago_": "Greater Chicago Area",
+            "dallas_fort_worth_": "Dallas-Fort Worth Metroplex",
+            "houston_": "Greater Houston",
+            "washington_dc_": "Washington DC-Baltimore Area",
+            "miami_": "Miami-Fort Lauderdale Area",
+            "philadelphia_": "Greater Philadelphia",
+            "atlanta_": "Atlanta Metropolitan Area",
+            "phoenix_": "Greater Phoenix Area",
+            "san_francisco_": "San Francisco Bay Area",
+            "sf_": "San Francisco Bay Area",
+            "sf": "San Francisco Bay Area",
+            "sfo": "San Francisco Bay Area",
+            "bay_area": "San Francisco Bay Area",
+            "silicone_valley": "San Francisco Bay Area",
+            "san_jose_": "San Francisco Bay Area",
+            "sjc_": "San Francisco Bay Area",
+            "sj_": "San Francisco Bay Area",
+            "detroit_": "Detroit Metropolitan Area",
+            "seattle_": "Greater Seattle Area",
+            "minneapolis_saint_paul_": "Greater Minneapolis-St. Paul Area",
+            "san_diego_": "San Diego Metropolitan Area",
+            "tampa_": "Greater Tampa Bay Area",
+            "denver_": "Denver Metropolitan Area",
+            "baltimore_": "Baltimore metropolitan area, Maryland, United States",
+            "salt_lake_city_": "Salt Lake City Metropolitan Area",
+            "salt_lake_": "Salt Lake City Metropolitan Area",
+            "slc_": "Salt Lake City Metropolitan Area",
+            "slc": "Salt Lake City Metropolitan Area",
+            "barcelona_": "Greater Barcelona Metropolitan Area",
+            "valencia_": "Greater Valencia Metropolitan Area",
+            "schengen_": "Schengen Area"
+        }
         if geoid==0 and len(location)==0:
             return ""
         if geoid==0: #location is not empty
             geoid = geoids.get(location.lower(), 0)
             if geoid==0:
-                loc =f'&location={location}'
-            else:
-                loc = f'&geoid={geoid}'
+                loc =f'&location={metro_locations.get(location.lower(), location)}'
         else:
             loc = f'&geoid={geoid}'
         return loc
@@ -216,18 +241,20 @@ class LinkedInJobManager:
             job_page_number = -1
             utils.printyellow(f"Starting the search for {position} in {location}.")
 
+            os.makedirs(os.path.join(EnvironmentKeys.get_key('OUTPUT_JOBS_DIRECTORY',False), make_valid_path(location)), exist_ok=True)
+
             try:
                 while True:
                     page_sleep += 1
                     job_page_number += 1
-                    utils.printyellow(f"Going to job page {job_page_number}")
+                    utils.printyellow(f"Going to job page {job_page_number} for {position} in {location}")
                     self.next_job_page(position, location_url, job_page_number)
 
-                    utils.printyellow(f"position: {position}, location_url: {location_url}")
+                    utils.printyellow(f"Loaded page {job_page_number} position: {position}, location_url: {location_url}")
                     time.sleep(random.uniform(1.5, 3.5))
-                    utils.printyellow("Starting the application process for this page...")
-                    self.apply_jobs()
-                    utils.printyellow("Applying to jobs on this page has been completed!")
+                    utils.printyellow(f"Starting the application process for the page {job_page_number} for {position} in {location}...")
+                    self.apply_jobs(search_position=position, search_location=location)
+                    utils.printyellow(f"Applying to jobs on the page {job_page_number} for {position} in {location} has been completed!")
 
                     time_left = minimum_page_time - time.time()
                     if time_left > 0:
@@ -254,7 +281,7 @@ class LinkedInJobManager:
                 time.sleep(sleep_time)
                 page_sleep += 1
 
-    def build_job_list(self, job_list: List[Job]=None):
+    def build_job_list(self, job_list: List[Job]=None, search_location: str=None, search_position: str=None):
         if job_list is None: job_list = []
         try:
             job_results = self.driver.find_element(By.CLASS_NAME, "jobs-search-results-list")
@@ -281,26 +308,31 @@ class LinkedInJobManager:
                     print(f"ALREADY APPLIED: Job {job_title} at {company_name} in {location_raw} id:{id}. Skipping")
                     continue
 
-
-
                 job = Job(title=job_title,
                           company=company_name,
                           location_raw=location_raw,
                           link=link,
                           apply_method=apply_method,
-                          id=id
+                          id=id,
+                          _search_location=search_location,
+                          _search_position=search_position
                           )
 
-                print(job)
+                #check if that job id has already been processed:
+                if self.is_completed(job):
+                    printyellow(f"ALREADY APPLIED: Job {job_title} at {company_name} in {location_raw} id:{id}. Skipping")
+                    continue
+
                 job_list.append(job)
                 c += 1
                 print(f"Added job {c} to the list. Company:{job.company}, Title:{job.title}, id:{job.id}")
+
             utils.printyellow(f"len(job_list): {len(job_list)}")
         except Exception as e:
             print(f'Exception while adding jobs from page. len(job_list):{len(job_list)} Error: {e}')
         return job_list
 
-    def apply_jobs(self):
+    def apply_jobs(self, search_location: str=None, search_position: str = ''):
             #job_list=[]
             try:
                 no_jobs_element = self.driver.find_element(By.CLASS_NAME, 'jobs-search-two-pane__no-results-banner--expand')
@@ -314,7 +346,7 @@ class LinkedInJobManager:
             except NoSuchElementException:
                 pass
 
-            job_list = self.build_job_list()
+            job_list = self.build_job_list(search_location=search_location, search_position=search_position)
 
             if job_list is None or len(job_list)==0:
                 print("Job list is empty. No jobs found")
@@ -324,30 +356,31 @@ class LinkedInJobManager:
 
             k=-1
             for job in job_list:
+
                 k+=1
                 utils.printyellow(f"Processing job {k}; title: {job.title}; company name: {job.company}; jobid: {job.id}; apply_method: {job.apply_method}")
                 if self.is_blacklisted(job.title, job.company, job.link):
                     utils.printyellow(f"SKIPPING: Blacklisted {job.title} at {job.company}, skipping...")
-                    self.write_to_json(job.base_path, data=job.json, name='skipped')
+                    self.write_to_json(job.base_loc_path, data=job.json, name='skipped')
                     #self.write_to_status_log_json(job, "skipped")
                     continue
                 if self.is_completed(job):
                     utils.printyellow(f"SKIPPING: Has been already completed {job.title} at {job.company}, skipping...")
-                    self.write_to_json(job.base_path, data=job.json, name='skipped')
+                    self.write_to_json(job.base_loc_path, data=job.json, name='skipped')
                     #self.write_to_status_log_json(job, "skipped")
                     continue
                 try:
                     if job.apply_method not in {"Continue", "Applied", "Apply"}:
                         self.easy_applier_component.job_apply(job)
                         utils.printcolor(f"COMPLETED: Has completed {job.title} at {job.company}, jobid: {job.id}", 'Blue')
-                        self.write_to_json(job.base_path, data=job.json, name='success')
-                        self.write_to_json(job.base_path, data={"link":f'{job.link}'}, name='seen')
+                        self.write_to_json(job.base_loc_path, data=job.json, name='success')
+                        self.write_to_json(job.base_loc_path, data={"link": f'{job.link}'}, name='seen')
                         #self.write_to_status_log_json(job, "success")
 
                 except Exception as e:
                     utils.printred(f'FAILED: Failed job_apply for job id:{job.id}')
                     utils.printred(traceback.format_exc())
-                    self.write_to_json(job.base_path, data=job.json, name='failed')
+                    self.write_to_json(job.base_loc_path, data=job.json, name='failed')
                     #self.write_to_status_log_json(job, "failed")
                     continue
 
@@ -410,7 +443,7 @@ class LinkedInJobManager:
 
         data = job.json
 
-        file_path = os.path.join(job.base_path, f"{file_name}.json")
+        file_path = os.path.join(job.base_loc_path, f"{file_name}.json")
         utils.printyellow(f"Writing to file: pdf_path: {pdf_path}; title: {job.title}; company: {job.company}")
         if not os.path.exists(file_path):
             utils.printyellow(f"file {file_path} doesn't exist, creating")
@@ -506,7 +539,7 @@ class LinkedInJobManager:
         #link_seen = link in self.seen_jobs
         return title_blacklisted or company_blacklisted or link_seen
 
-    def is_completed(self, job):
+    def is_completed_old(self, job):
         res = False
         link_seen = job.link in self.seen_jobs
         for root, dirs, files in os.walk(job.base_path):
@@ -514,8 +547,8 @@ class LinkedInJobManager:
                 # Check if subfolder name matches the pattern
                 if subfolder.split('.')[-1]==job.id:
                     res = True
-                    is_resume = os.path.exists(os.path.join(job.base_path, subfolder,job.resume.file_name))
-                    is_job_desc = os.path.exists(os.path.join(job.base_path, subfolder,job.job_docset.file_name))
+                    is_resume = os.path.exists(os.path.join(job.base_loc_path, subfolder, job.resume.file_name))
+                    is_job_desc = os.path.exists(os.path.join(job.base_loc_path, subfolder, job.job_docset.file_name))
                     if not( is_resume and is_job_desc):
                         resume_warning_string = '' if is_resume else 'Resume file does not'
                         job_desc_warning_string = '' if is_job_desc else 'Job description file does not'
@@ -525,3 +558,14 @@ class LinkedInJobManager:
 
         return res
 
+    def is_completed(self, job):
+        res = False
+        link_seen = job.link in self.seen_jobs
+        if job.id is None or len(job.id)==0: return False
+        for root, dirs, _ in os.walk(job.base_path):
+            for dir in dirs:
+                if job.id in dir.split('.'):
+                    print(f'Job Id {job.id} has been found in a folder {dir}')
+                    return True
+
+        return False

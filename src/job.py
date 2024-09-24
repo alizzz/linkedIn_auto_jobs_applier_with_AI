@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import pathlib
 from src.utils import printcolor,printred,printyellow
 from src.utils import EnvironmentKeys
+from src.utils import make_valid_os_path_string
 
 @dataclass
 class DocSet:
@@ -98,6 +99,8 @@ class Job:
     resume_path: str=''
     location: str =''
     _date_time: datetime.datetime = None
+    _search_location: str=None
+    _search_position: str=None
     #base_path: str = ''
     #pdf_file: str = ""
     #html_file: str = ""
@@ -106,6 +109,13 @@ class Job:
     job_docset: DocSet = None
     cover: DocSet = None
 
+    @property
+    def search_location(self):
+        return make_valid_os_path_string(self._search_location)
+
+    @property
+    def search_position(self):
+        return make_valid_os_path_string
     def __post_init__(self):
         if id == "": self.set_id_from_link(self.link)
         self.set_office_policy(Job.get_office_policy_from_raw_location(self.location_raw))
@@ -179,9 +189,10 @@ class Job:
             "applied": self.is_applied,
             "link": self.link,
             "job_recruiter": self.recruiter_link,
-            "base_path": self.base_path,
+            "base_path": self.base_loc_path,
             "skills": self.skills,
             "quals": self.quals,
+
             "job_desc_file": self.job_docset.txt,
             "resume_pdf": self.resume.pdf,
             "resume_html": self.resume.html
@@ -239,13 +250,24 @@ class Job:
     def get_path(self):
         self.set_date_time() # setting it only if it has not been set before
         name = f'{self.date_time_string}.{self.truncated_co_name}.{self._abbreviated_position}.{self.id}'
-        return os.path.join(self.base_path, name)
-    @property
-    def base_path(self):
-        return self.get_base_path()
-    def get_base_path(self):
+        return os.path.join(self.base_loc_path, name)
+
+    @staticmethod
+    def get_base_path():
         return EnvironmentKeys.get_key('OUTPUT_JOBS_DIRECTORY', False, r'data_folder\output\Jobs\name_s')
 
+    @property
+    def base_path(self):
+        return Job.get_base_path()
+
+    @property
+    def base_loc_path(self):
+        return self.get_base_loc_path()
+
+    def get_base_loc_path(self):
+        base_loc_path = os.path.join(Job.get_base_path(), make_valid_os_path_string(self.search_location))
+        os.makedirs(base_loc_path, exist_ok=True)
+        return base_loc_path
     @property
     def applied_file(self):
         return os.path.join(self.get_path(), f'.{DocSet.key_applied}')
