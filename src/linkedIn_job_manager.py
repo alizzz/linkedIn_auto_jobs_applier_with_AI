@@ -565,7 +565,7 @@ class LinkedInJobManager:
         for root, dirs, _ in os.walk(job.base_path):
             for dir in dirs:
                 if job.id in dir.split('.'):
-                    print(f'Job Id {job.id} has been found in a folder {dir}')
+                    print(f'in LinkedInJobManager::is_completed() Job Id {job.id} has been found in a folder {dir}, path: {root}. DEBUG={self.is_debug}')
                     return True
 
         return False
