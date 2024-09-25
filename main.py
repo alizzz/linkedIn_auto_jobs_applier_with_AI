@@ -173,7 +173,7 @@ def init_browser() -> webdriver.Chrome:
 
 def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_key: str):
     try:
-        style_manager = StyleManager()
+        style_manager = StyleManager(styles_file=parameters['css'])
         resume_generator = ResumeGenerator()
         with open(parameters['uploads']['plainTextResume'], "r", encoding='iso-8859-1') as file:
             plain_text_resume = file.read()
@@ -223,7 +223,8 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
 @click.option('--jobs', type=str, default=r'Jobs', help=r'Path to the jobs output folder. Default value `data_folder\output\Jobs`')
 @click.option('--data_folder', type=str, default=r'data_folder', help='Path to the output data folder. Default value `data_folder`')
 @click.option('--debug', type=str, default='False', help='is application being debugged')
-def main(resume: Path = None, plain: str = None, secret: str = None, config: str = None, jobs: str=None, data_folder: str=None, debug:str=None):
+@click.option('--css',type=str, default = None, help='path to a style sheet')
+def main(resume: Path = None, plain: str = None, secret: str = None, config: str = None, jobs: str=None, data_folder: str=None, debug:str=None, css:str=None):
     try:
         data_folder = Path(data_folder)
         config_dict = {
@@ -242,6 +243,7 @@ def main(resume: Path = None, plain: str = None, secret: str = None, config: str
         os.environ['OUTPUT_FILE_DIRECTORY'] = output_folder.__str__()
 
         parameters['jobs'] = jobs
+        parameters['css'] = css
 
         os.environ['DEBUG']=debug
         parameters['DEBUG']=debug
