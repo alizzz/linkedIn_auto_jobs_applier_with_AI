@@ -91,7 +91,6 @@ class LinkedInEasyApplier:
             job.quals = self._get_qual_required()
 
             #gpt_answerer.set_job(job) uses job description to determine pay range. It has to be called prior to set_job()
-            job.skills = self._get_skills_from_post()
             self.gpt_answerer.set_job(job)
             printcolor(f'About to start creating resume for job id {job.id} in {job.get_base_loc_path()}\\{job.resume_path}', 'blue')
             self._create_resume(job)
@@ -384,7 +383,8 @@ class LinkedInEasyApplier:
             with open(os.path.join(job.path,f'linkedin_job_{job.id}.url'), 'w') as f:
                 f.write(f"[InternetShortcut]\nURL={job.link}\n")
         except Exception as e:
-            print(f'Exception in _create_resume() for job id {job.id}. Error:{e}')
+            tb_str = traceback.format_exc()
+            print(f'Exception in _create_resume() for job id {job.id}. Error:{e}\nTraceback: {tb_str}')
 
         return job.resume.pdf
 
