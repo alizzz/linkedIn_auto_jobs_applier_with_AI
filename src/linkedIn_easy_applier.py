@@ -25,6 +25,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver import ActionChains
 import src.utils as utils
+from CustomExceptions import NotRelevantError
 #import src.config as config
 
 class LinkedInEasyApplier:
@@ -83,6 +84,8 @@ class LinkedInEasyApplier:
         time.sleep(random.uniform(3, 5))
         try:
             job.set_job_description(self._get_job_description())
+            if not self.gpt_answerer.is_relevant_job(job.description):
+                raise NotRelevantError(message=f'NOT RELEVANT: Job id:{job.id}, position: {job.title} at {job.company} is not relevant')
             job.set_recruiter_link(self._get_job_recruiter())
             job.set_office_policy(self._get_office_policy())
             #ToDo: Extract skills
@@ -98,26 +101,32 @@ class LinkedInEasyApplier:
             self._create_cover(job)
 
             if job.is_easyApply:
-                easy_apply_button = self._find_easy_apply_button()
-                actions = ActionChains(self.driver)
-                actions.move_to_element(easy_apply_button).click().perform()
-                self._fill_application_form(job)
-                try:
-                    applied_marker_file = os.path.join(job.path, '.applied')
-                    if os.path.exists(applied_marker_file):
-                        os.utime(applied_marker_file, None)
-                    else:
-                        with open(applied_marker_file, 'w') as f:
+                if not EnvironmentKeys.get_key('SKIP_APPLY'):
+                    easy_apply_button = self._find_easy_apply_button()
+                    actions = ActionChains(self.driver)
+                    actions.move_to_element(easy_apply_button).click().perform()
+                    self._fill_application_form(job)
+                    try:
+                        applied_marker_file = os.path.join(job.path, '.applied')
+                        if os.path.exists(applied_marker_file):
                             os.utime(applied_marker_file, None)
-                            f.write(job.link)
-                    print(f'added .applied to jobid:{job.id}, path:{job.path}')
-                except Exception as e:
-                    print(f"Failed saving '.applied' file for {job.base_loc_path}")
+                        else:
+                            with open(applied_marker_file, 'w') as f:
+                                os.utime(applied_marker_file, None)
+                                f.write(job.link)
+                        print(f'added .applied to jobid:{job.id}, path:{job.path}')
+                    except Exception as e:
+                        print(f"Failed saving '.applied' file for {job.base_loc_path}")
+                else:
+                    print(
+                        f'Job {job.id} for {job.title} at {job.company} in {job.location}({job.office_policy}) is Easy Apply but EASY_APPLY key is False. Please review manually')
             else:
                 print(f'Job {job.id} for {job.title} at {job.company} in {job.location}({job.office_policy}) is not an Easy Apply. Please review manually')
                 #job.applied="No"
 
             res = True
+        except NotRelevantError as e:
+            raise e
         except Exception:
             tb_str = traceback.format_exc()
             self._discard_application()

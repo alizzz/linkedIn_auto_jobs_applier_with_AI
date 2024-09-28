@@ -8,8 +8,11 @@ personal_information:
   phone_prefix: "[Your Phone Prefix]"
   phone: "[Your Phone Number]"
   email: "[Your Email Address]"
+  other_contacts: "[Your other contacts to show on resume]"
   github: "[Your GitHub Profile URL]"
   linkedin: "[Your LinkedIn Profile URL]"
+  years_technical_experience: "[Number of years]"
+  years_mgmt_experience: "[Number of years]"
 
 education_details:
   - degree: "[Your Degree]"

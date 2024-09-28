@@ -3,6 +3,7 @@ import os
 import random
 import time
 import traceback
+from dotenv import load_dotenv
 from itertools import product
 from pathlib import Path
 from typing import List, Optional, Any, Tuple
@@ -14,13 +15,13 @@ import src.utils as utils
 from src.utils import EnvironmentKeys
 from src.utils import printcolor, printyellow, printred
 from src.job import Job
-from src.utils import make_valid_path, make_valid_os_path_string
+from src.utils import make_valid_path, make_valid_os_path_string, EnvironmentKeys
 from src.linkedIn_easy_applier import LinkedInEasyApplier
 from lib_resume_builder_AIHawk.config import global_config
-
+from CustomExceptions import NotRelevantError
 from urllib.parse import quote
 
-
+load_dotenv()
 
 class JobTile:
     def __init__(self, tile: Any):
@@ -215,6 +216,8 @@ class LinkedInJobManager:
             "salt_lake_": "Salt Lake City Metropolitan Area",
             "slc_": "Salt Lake City Metropolitan Area",
             "slc": "Salt Lake City Metropolitan Area",
+            "austin_": "Austin, Texas Metropolitan Area",
+            "portland_oregon_": "Portland, Oregon Metropolitan Area",
             "barcelona_": "Greater Barcelona Metropolitan Area",
             "valencia_": "Greater Valencia Metropolitan Area",
             "schengen_": "Schengen Area"
@@ -323,6 +326,9 @@ class LinkedInJobManager:
                     printyellow(f"ALREADY APPLIED: Job {job_title} at {company_name} in {location_raw} id:{id}. Skipping")
                     continue
 
+                if EnvironmentKeys.get_key('REMOTE_ONLY') and job.office_policy.lower()!='remote':
+                    printyellow(f'REMOTE_ONLY is set to True and job.office_policy is {job.office_policy} for Job {job_title} at {company_name} in {location_raw} id:{id}. Skipping')
+
                 job_list.append(job)
                 c += 1
                 print(f"Added job {c} to the list. Company:{job.company}, Title:{job.title}, id:{job.id}")
@@ -376,7 +382,10 @@ class LinkedInJobManager:
                         self.write_to_json(job.base_loc_path, data=job.json, name='success')
                         self.write_to_json(job.base_loc_path, data={"link": f'{job.link}'}, name='seen')
                         #self.write_to_status_log_json(job, "success")
-
+                except NotRelevantError as e:
+                    printcolor(e,'blue')
+                    self.write_to_json(job.base_loc_path, data=job.json, name='skipped')
+                    continue
                 except Exception as e:
                     utils.printred(f'FAILED: Failed job_apply for job id:{job.id}')
                     utils.printred(traceback.format_exc())

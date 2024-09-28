@@ -161,6 +161,37 @@ class GPTAnswerer:
     def set_job_application_profile(self, job_application_profile):
         self.job_application_profile = job_application_profile
         
+
+    def is_relevant_job(self, job_desc:str,
+                        relevance_criteria:str='software development, software engineering, machine learning, data science, data analytics, or AI' ) -> bool:
+        relevant = False
+        try:
+            prompt_is_relevant="""You are an experience HR professional and job desciption analyst. 
+            Read the job description and thoroughly analyze it. Answer the question if this job is relevant to {relevance_criteria}. 
+            Answer only the relevance and your confidence in the answer using the following valid json of the following format
+            'relevant': 'Yes'  or 'No',
+            'confidence': how confident are you,
+            'industry':what industry job is in,
+            'job family': job family
+
+            **Job description** 
+              {job_desc}
+            
+            do not output anything else. Do not output ```json or ```
+            """
+
+            prompt_sanitize_template = self._preprocess_template_string(prompt_is_relevant)
+            prompt = ChatPromptTemplate.from_template(prompt_sanitize_template)
+            chain = prompt | self.llm_cheap | StrOutputParser()
+            output = chain.invoke({"relevance_criteria": relevance_criteria, "job_desc": job_desc})
+            j = json.loads(output)
+            relevant = j["relevant"]=='Yes'
+            print(f'Is_relevant return {output}')
+        except Exception as e:
+            print(f'Exception in is_relevant position. Error: {e}')
+
+        return relevant
+
     def _sanitize_and_abbreviate_position(self, position: str, company_name: str):
         output=position
         p=position
