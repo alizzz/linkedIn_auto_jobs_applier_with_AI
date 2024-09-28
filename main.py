@@ -16,6 +16,7 @@ from lib_resume_builder_AIHawk import Resume,StyleManager,FacadeManager,ResumeGe
 from src.utils import chromeBrowserOptions
 from src.utils import printcolor, printyellow, printred
 from src.utils import EnvironmentKeys
+#from lib_resume_builder_AIHawk.utils import get_dict_names_from_dir
 from src.gpt import GPTAnswerer
 from src.linkedIn_authenticator import LinkedInAuthenticator
 from src.linkedIn_bot_facade import LinkedInBotFacade

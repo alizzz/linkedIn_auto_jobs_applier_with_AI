@@ -231,15 +231,24 @@ class LinkedInJobManager:
         else:
             loc = f'&geoid={geoid}'
         return loc
-    def start_applying(self):
+    def start_applying(self, max_pages_per_location=5):
         self.easy_applier_component = LinkedInEasyApplier(self.driver, self.resume_path, self.set_old_answers, self.gpt_answerer, self.resume_generator_manager)
         searches = list(product(self.positions, self.locations))
         random.shuffle(searches)
         page_sleep = 0
-        minimum_time = 60 * 5
+        minimum_time = 60 * 3
         minimum_page_time = time.time() + minimum_time
+        jobs_stat_run = {
+            'completed': 0,
+            'found': 0,
+            'already_processed': 0,
+            'blacklisted': 0,
+            'not_relevant': 0
+        }
+        jobs_stat_search = jobs_stat_run.copy()
 
         for position, location in searches:
+
             location_url = self.get_location_url(location)
             job_page_number = -1
             utils.printyellow(f"Starting the search for {position} in {location}.")
@@ -247,17 +256,33 @@ class LinkedInJobManager:
             os.makedirs(os.path.join(EnvironmentKeys.get_key('OUTPUT_JOBS_DIRECTORY',False), make_valid_path(location)), exist_ok=True)
 
             try:
+                for key in jobs_stat_run.keys():
+                    jobs_stat_run[key]+=jobs_stat_search[key]
+                    jobs_stat_search[key]=0
+
                 while True:
                     page_sleep += 1
                     job_page_number += 1
-                    utils.printyellow(f"Going to job page {job_page_number} for {position} in {location}")
+                    if job_page_number>max_pages_per_location:
+                        break
+                    utils.printyellow(f"Going to search page {job_page_number} for {position} in {location}")
                     self.next_job_page(position, location_url, job_page_number)
 
-                    utils.printyellow(f"Loaded page {job_page_number} position: {position}, location_url: {location_url}")
+                    if self.is_no_more_jobs_found():
+                        printcolor(f"No more matching jobs found for {position} in {location}\nFound {jobs_stat_search['found']}. Processed: {jobs_stat_search['completed']}. Skipped: {jobs_stat_search['already_processed']+jobs_stat_search['blacklisted']+jobs_stat_search['not_relevant']}: (Already Processed: {jobs_stat_search['already_processed']}. Blacklisted:{jobs_stat_search['blacklisted']}, Not relevant: {jobs_stat_search['not_relevant']})", 'magenta')
+                        break
+
+                    utils.printyellow(f"Loaded search page {job_page_number} position: {position}, location_url: {location_url}")
                     time.sleep(random.uniform(1.5, 3.5))
-                    utils.printyellow(f"Starting the application process for the page {job_page_number} for {position} in {location}...")
-                    self.apply_jobs(search_position=position, search_location=location)
-                    utils.printyellow(f"Applying to jobs on the page {job_page_number} for {position} in {location} has been completed!")
+                    utils.printyellow(f"Starting the application process for the search page {job_page_number} for {position} in {location}...")
+                    jobs_applied = self.apply_jobs(search_position=position, search_location=location)
+                    try:
+                        for key in jobs_stat_search:
+                            jobs_stat_search[key]+=jobs_applied[key]
+                    except:
+                        pass
+
+                    utils.printyellow(f"Applying to jobs on the search page {job_page_number} for {position} in {location} has been completed!")
 
                     time_left = minimum_page_time - time.time()
                     if time_left > 0:
@@ -338,60 +363,84 @@ class LinkedInJobManager:
             print(f'Exception while adding jobs from page. len(job_list):{len(job_list)} Error: {e}')
         return job_list
 
+    def is_no_more_jobs_found(self) -> bool:
+        try:
+            no_jobs_found_element = self.driver.find_element(By.CLASS_NAME, "jobs-search-no-results-banner")
+            if no_jobs_found_element is not None:
+                return True
+        except NoSuchElementException:
+            return False
+        except Exception as e:
+            print(f'Exception in is_no_more_jobs_found. Error: {e}')
+        return False
+
     def apply_jobs(self, search_location: str=None, search_position: str = ''):
-            #job_list=[]
-            try:
-                no_jobs_element = self.driver.find_element(By.CLASS_NAME, 'jobs-search-two-pane__no-results-banner--expand')
-                #utils.printyellow(f"no_jobs_element: {no_jobs_element}")
-                if 'No matching jobs found' in no_jobs_element.text:
-                    print("No matching jobs found")
-                    raise Exception("No more jobs on this page")
-                if 'unfortunately, things aren' in self.driver.page_source.lower():
-                    print("unfortunately, things aren")
-                    raise Exception("No more jobs on this page")
-            except NoSuchElementException:
-                pass
-
-            job_list = self.build_job_list(search_location=search_location, search_position=search_position)
-
-            if job_list is None or len(job_list)==0:
-                print("Job list is empty. No jobs found")
+        #job_list=[]
+        try:
+            no_jobs_element = self.driver.find_element(By.CLASS_NAME, 'jobs-search-two-pane__no-results-banner--expand')
+            #utils.printyellow(f"no_jobs_element: {no_jobs_element}")
+            if 'No matching jobs found' in no_jobs_element.text:
+                print("No matching jobs found")
                 raise Exception("No more jobs on this page")
-            else:
-                print(f'Found {len(job_list)} jobs on the page')
+            if 'unfortunately, things aren' in self.driver.page_source.lower():
+                print("unfortunately, things aren")
+                raise Exception("No more jobs on this page")
+        except NoSuchElementException:
+            pass
 
-            k=-1
-            for job in job_list:
+        job_list = self.build_job_list(search_location=search_location, search_position=search_position)
 
-                k+=1
-                utils.printyellow(f"Processing job {k}; title: {job.title}; company name: {job.company}; jobid: {job.id}; apply_method: {job.apply_method}")
-                if self.is_blacklisted(job.title, job.company, job.link):
-                    utils.printyellow(f"SKIPPING: Blacklisted {job.title} at {job.company}, skipping...")
-                    self.write_to_json(job.base_loc_path, data=job.json, name='skipped')
-                    #self.write_to_status_log_json(job, "skipped")
-                    continue
-                if self.is_completed(job):
-                    utils.printyellow(f"SKIPPING: Has been already completed {job.title} at {job.company}, skipping...")
-                    self.write_to_json(job.base_loc_path, data=job.json, name='skipped')
-                    #self.write_to_status_log_json(job, "skipped")
-                    continue
-                try:
-                    if job.apply_method not in {"Continue", "Applied", "Apply"}:
-                        self.easy_applier_component.job_apply(job)
-                        utils.printcolor(f"COMPLETED: Has completed {job.title} at {job.company}, jobid: {job.id}", 'Blue')
-                        self.write_to_json(job.base_loc_path, data=job.json, name='success')
-                        self.write_to_json(job.base_loc_path, data={"link": f'{job.link}'}, name='seen')
-                        #self.write_to_status_log_json(job, "success")
-                except NotRelevantError as e:
-                    printcolor(e,'blue')
-                    self.write_to_json(job.base_loc_path, data=job.json, name='skipped')
-                    continue
-                except Exception as e:
-                    utils.printred(f'FAILED: Failed job_apply for job id:{job.id}')
-                    utils.printred(traceback.format_exc())
-                    self.write_to_json(job.base_loc_path, data=job.json, name='failed')
-                    #self.write_to_status_log_json(job, "failed")
-                    continue
+        if job_list is None or len(job_list)==0:
+            print("Job list is empty. No jobs found")
+            raise Exception("No more jobs on this page")
+        else:
+            print(f'Found {len(job_list)} jobs on the page')
+
+        k=-1
+        _jobs_stat = {
+            'completed': 0,
+            'found':len(job_list),
+            'already_processed':0,
+            'blacklisted':0,
+            'not_relevant':0
+        }
+        for job in job_list:
+
+            k+=1
+            utils.printyellow(f"Processing job {k}; title: {job.title}; company name: {job.company}; jobid: {job.id}; apply_method: {job.apply_method}")
+            if self.is_blacklisted(job.title, job.company, job.link):
+                utils.printyellow(f"SKIPPING: Blacklisted {job.title} at {job.company}, skipping...")
+                self.write_to_json(job.base_loc_path, data=job.json, name='skipped')
+                #self.write_to_status_log_json(job, "skipped")
+                _jobs_stat['blacklisted']+=1
+                continue
+            if self.is_completed(job):
+                utils.printyellow(f"SKIPPING: Has been already completed {job.title} at {job.company}, skipping...")
+                self.write_to_json(job.base_loc_path, data=job.json, name='skipped')
+                _jobs_stat['already_processed']+=1
+                #self.write_to_status_log_json(job, "skipped")
+                continue
+            try:
+                if job.apply_method not in {"Continue", "Applied", "Apply"}:
+                    self.easy_applier_component.job_apply(job)
+                    utils.printcolor(f"COMPLETED: Has completed {job.title} at {job.company}, jobid: {job.id}", 'Blue')
+                    self.write_to_json(job.base_loc_path, data=job.json, name='success')
+                    self.write_to_json(job.base_loc_path, data={"link": f'{job.link}'}, name='seen')
+                    _jobs_stat['completed']+=1
+                    #self.write_to_status_log_json(job, "success")
+            except NotRelevantError as e:
+                printcolor(e,'blue')
+                self.write_to_json(job.base_loc_path, data=job.json, name='skipped')
+                _jobs_stat["not_relevant"]+=1
+                continue
+            except Exception as e:
+                utils.printred(f'FAILED: Failed job_apply for job id:{job.id}')
+                utils.printred(traceback.format_exc())
+                self.write_to_json(job.base_loc_path, data=job.json, name='failed')
+                #self.write_to_status_log_json(job, "failed")
+                continue
+
+        return _jobs_stat
 
     def write_to_json(self, base_path, data, name, indent=4):
         file_path = os.path.join(base_path, f'{name}.json')

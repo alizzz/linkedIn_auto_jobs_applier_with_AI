@@ -155,6 +155,8 @@ def printyellow(text):
     # Stampa il testo in giallo
     print(f"{YELLOW}{text}{RESET}")
 
+
+
 class EnvironmentKeys:
     def __init__(self):
         self.skip_apply = self._read_env_key_bool("SKIP_APPLY")

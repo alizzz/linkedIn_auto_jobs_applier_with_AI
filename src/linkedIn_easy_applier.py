@@ -84,7 +84,7 @@ class LinkedInEasyApplier:
         time.sleep(random.uniform(3, 5))
         try:
             job.set_job_description(self._get_job_description())
-            if not self.gpt_answerer.is_relevant_job(job.description):
+            if not self.gpt_answerer.is_relevant_job(job):
                 raise NotRelevantError(message=f'NOT RELEVANT: Job id:{job.id}, position: {job.title} at {job.company} is not relevant')
             job.set_recruiter_link(self._get_job_recruiter())
             job.set_office_policy(self._get_office_policy())

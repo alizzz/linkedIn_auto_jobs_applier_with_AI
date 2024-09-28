@@ -92,12 +92,16 @@ class Job:
     skills = []
     quals = []
     recruiter_link: str = ""
+    resume_path: str = ''
+    location: str = ''
+    relevancy: str='unk'
+    is_relevant_confidence: str='unk'
+    industry: str = 'unk'
+    family: str='unk'
     _user_path: str = None
     _applied: str = 'unk'
     _abbreviated_position: str= None
     _truncated_company_name: str= None
-    resume_path: str=''
-    location: str =''
     _date_time: datetime.datetime = None
     _search_location: str=None
     _search_position: str=None
@@ -192,7 +196,10 @@ class Job:
             "base_path": self.base_loc_path,
             "skills": self.skills,
             "quals": self.quals,
-
+            "is_relevant": self.is_relevant,
+            "is_relevant_confidence": self.is_relevant_confidence,
+            "industry": self.industry,
+            "job_family": self.family,
             "job_desc_file": self.job_docset.txt,
             "resume_pdf": self.resume.pdf,
             "resume_html": self.resume.html
@@ -201,7 +208,14 @@ class Job:
     #@property
     #def base_path(self):
 
-
+    @property
+    def is_relevant(self) ->bool:
+        if self.relevancy is None:
+            return False
+        return self.relevancy.lower() in ['y','yes', '1', 'on', 't','true']
+    @is_relevant.setter
+    def is_relevant(self, value):
+        self.relevancy = value
     @property
     def abbreviated_position(self):
         if (self._abbreviated_position is None or len(self._abbreviated_position)==0):

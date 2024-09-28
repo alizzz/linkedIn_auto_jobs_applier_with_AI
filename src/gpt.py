@@ -14,6 +14,7 @@ from langchain_openai import ChatOpenAI
 from Levenshtein import distance
 from src.utils import EnvironmentKeys
 import src.strings as strings
+from src.job import Job
 
 load_dotenv()
 
@@ -162,9 +163,11 @@ class GPTAnswerer:
         self.job_application_profile = job_application_profile
         
 
-    def is_relevant_job(self, job_desc:str,
-                        relevance_criteria:str='software development, software engineering, machine learning, data science, data analytics, or AI' ) -> bool:
+    #there is a side effect - job relevancy fields are updated
+    def is_relevant_job(self, job:Job,
+                        relevance_criteria:str='software development, software engineering, machine learning, data science, analytics, or AI' ) -> bool:
         relevant = False
+        job_desc = job.description
         try:
             prompt_is_relevant="""You are an experience HR professional and job desciption analyst. 
             Read the job description and thoroughly analyze it. Answer the question if this job is relevant to {relevance_criteria}. 
@@ -185,8 +188,12 @@ class GPTAnswerer:
             chain = prompt | self.llm_cheap | StrOutputParser()
             output = chain.invoke({"relevance_criteria": relevance_criteria, "job_desc": job_desc})
             j = json.loads(output)
-            relevant = j["relevant"]=='Yes'
-            print(f'Is_relevant return {output}')
+            job.relevancy=j['relevant']
+            job.is_relevant_confidence = j['confidence']
+            job.industry=j['industry']
+            job.family = j['job family']
+            relevant = j["relevant"].lower() in ['yes','y','true','t']
+            print(f'Is_relevant returns {output}')
         except Exception as e:
             print(f'Exception in is_relevant position. Error: {e}')
 
