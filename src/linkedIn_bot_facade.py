@@ -1,4 +1,9 @@
 from src.gpt import GPTAnswerer
+import datetime
+import base64
+import os
+import traceback
+
 class LinkedInBotState:
     def __init__(self):
         self.reset()
@@ -72,3 +77,55 @@ class LinkedInBotFacade:
     def _ensure_job_profile_and_resume_set(self):
         if not self.state.job_application_profile_set:
             raise ValueError("Job application profile and resume must be set before proceeding.")
+
+    def generate_resume_from_src(self, url:str=None, file:str=None, text:str=None, is_linkedin:bool=True):
+        #check if max one of the parameters is not None
+        s = sum([url is None, file is None, text is None])
+        if s<2:
+            print(f"WARNING: In generate_resume_from_src. Only one of the url, file, text parameters could be not None. Currently there are {3-s} non-null parameters")
+            print(f"In generate_resume_from_src. url={url if url is not None else 'None'}, "
+              f"file={file if file is not None else 'None'}, text={text if text is not None else 'None'}")
+
+        if url is not None:
+            self.generate_resume_from_url(url=url, is_linkedin=is_linkedin)
+        elif file is not None:
+            try:
+                if os.path.exists(file):
+                    with open(file, 'r') as f:
+                        text = f.read()
+                        _file_name = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.Resume.frm_file'
+                        self._generate_resume(url=None, text=text, file_name_out=_file_name)
+                else:
+                    print(f"WARNING: File doesn't exist. In generate_resume_from_src reading from file {file}")
+            except Exception as e:
+                print(f'Exception: In generate_resume_from_src reading from file {file} Error {e}')
+        elif text is not None:
+            _file_name = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.Resume.frm_txt'
+            self._generate_resume(url=None, text=text, file_name_out=_file_name)
+
+    def generate_resume_from_url(self, url, is_linkedin:bool=True):
+        if is_linkedin:
+            self.start_login()
+            job_desc_id = url.split('/')[-1]
+            _file_name = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.{job_desc_id}.Resume'
+        else:
+            _file_name = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.Resume'
+
+        self._generate_resume(url=url, text=None, file_name_out=_file_name)
+
+    def _generate_resume(self, url=None, text=None, file_name_out=None):
+        try:
+            output_folder = os.environ.get('OUTPUT_JOBS_DIRECTORY')
+            pdf64 = self.apply_component.resume_generator_manager.pdf_base64(job_description_url=url,
+                                                                             job_description_text=text,
+                                                                             html_file_name=os.path.join(output_folder,
+                                                                                                         f'{file_name_out}.html'),
+                                                                             delete_html_file=False)
+
+            pdf_data = base64.b64decode(pdf64)
+
+            with open(os.path.join(output_folder, f'{file_name_out}.pdf'), "xb") as f:
+                f.write(pdf_data)
+        except Exception as e:
+            print(f"Exception generating resume from url {url}. Error {e}")
+            print(f'Traceback {traceback.format_exc()}')

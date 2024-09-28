@@ -165,7 +165,7 @@ class EnvironmentKeys:
         if value.lower() in ['y','yes', '1', 'on', 't','true', 'n','no', '0', 'off', 'f','false']:
             EnvironmentKeys._set_key(value.lower() in ['y','yes', 't','true', '1', 'on'])
         else:
-            EnvironmentKeys._set_key(value)
+            EnvironmentKeys._set_key(key, value)
 
     @staticmethod
     def _set_key(key, value):

@@ -1,7 +1,11 @@
+import datetime
 import os
 import re
 import sys
+import base64
+import traceback
 from pathlib import Path
+from urllib.parse import urlparse
 import yaml
 import click
 from selenium import webdriver
@@ -208,11 +212,66 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
         os.environ["OUTPUT_JOBS_DIRECTORY"]=jobs_folder.__str__()
 
         bot.start_login()
-        bot.start_apply()
+
+        job_desc = parameters['job_desc']
+        if job_desc[0]:
+            if job_desc[1]=='linkedin':
+                try:
+                    job_desc_id = job_desc[2].split('/')[-1]
+                    _file_name = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.{job_desc_id}.Resume'
+                    pdf64 = resume_generator_manager.pdf_base64(job_description_url = job_desc[2], job_description_text = None,
+                                                                html_file_name=os.path.join(jobs_folder, f'{_file_name}.html'), delete_html_file=False)
+
+                    pdf_data = base64.b64decode(pdf64)
+
+                    with open(os.path.join(jobs_folder, f'{_file_name}.pdf'), "xb") as f:
+                        f.write(pdf_data)
+                except Exception as e:
+                    print(f"Exception generating resume from url {job_desc[2]}. Error {e}")
+                    print(f'Traceback {traceback.format_exc()}')
+
+        else:
+            bot.start_apply()
     except WebDriverException as e:
         print(f"WebDriver error occurred: {e}")
     except Exception as e:
         raise RuntimeError(f"Error running the bot: {str(e)}")
+
+
+def validate_url(url):
+    if url is None or len(url)==0: return False
+    try:
+        result = urlparse(url)
+        if all([result.scheme, result.netloc]):
+            return True
+    except:
+        pass
+
+    return False
+
+def validate_linkedin_id(linkedin_job_id):
+    # Check if the job ID is a numeric string of reasonable length (1 to 12 digits)
+    return bool(re.fullmatch(r'\d{1,12}', linkedin_job_id))
+
+def validate_linkedin_url(url: str):
+    if url is None or len(url)==0: return False
+    try:
+        # Parse the URL
+        result = urlparse(url)
+        # Check if it has a valid scheme and netloc
+        if all([result.scheme, result.netloc]):
+            # Check if the URL contains 'linkedin.com' and 'jobs/view'
+            if 'linkedin.com' in result.netloc and '/jobs/view/' in result.path:
+                return True
+    except:
+        pass
+    return False
+
+def validate_job_file_desc(job_file_desc):
+    if job_file_desc is None or len(job_file_desc)==0: return False
+    if os.path.exists(job_file_desc):
+        return True
+    return False
 
 
 @click.command()
@@ -223,8 +282,18 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
 @click.option('--jobs', type=str, default=r'Jobs', help=r'Path to the jobs output folder. Default value `data_folder\output\Jobs`')
 @click.option('--data_folder', type=str, default=r'data_folder', help='Path to the output data folder. Default value `data_folder`')
 @click.option('--debug', type=str, default='False', help='is application being debugged')
-@click.option('--css',type=str, default = None, help='path to a style sheet')
-def main(resume: Path = None, plain: str = None, secret: str = None, config: str = None, jobs: str=None, data_folder: str=None, debug:str=None, css:str=None):
+@click.option('--css',type=str, default = 'style_hawk.css', help='path to a style sheet')
+@click.option('--resume_template',type=str, default = 'hawk_resume_template.html', help='file name resume template')
+@click.option('--linkedin_url', type=str, default=None, help="Linkedin URL to job description - requires linkedin login")
+@click.option('--job_url', type=str, default=None, help="URL to job description - can be read without logging in (non-linkedin)")
+@click.option('--linkedin_id', type=str, default=None, help="Jobid on linkedin. Requires logging in")
+@click.option('--job_file_desc', type=str, default=None, help="Text file that contains job description")
+@click.option('--llm_cheap', type=str, default='gpt-4o-mini', help="cheap LLM model to use for tasks")
+@click.option('--llm', type=str, default='gpt-4o', help="LLM model")
+def main(resume: Path = None, plain: str = None, secret: str = None, config: str = None, jobs: str=None, data_folder: str=None, debug:str=None, css:str=None, resume_template:str=None,
+         linkedin_url: str=None, job_url: str=None, linkedin_id: str = None, job_file_desc:str=None,
+         llm_cheap: str=None, llm: str=None):
+
     try:
         data_folder = Path(data_folder)
         config_dict = {
@@ -244,6 +313,29 @@ def main(resume: Path = None, plain: str = None, secret: str = None, config: str
 
         parameters['jobs'] = jobs
         parameters['css'] = css
+        parameters['resume_template']=resume_template
+        EnvironmentKeys.set_key('resume_template', resume_template)
+
+        # only one (or none) of the job options are allowed. If more than one is specified, only the first valid one is used
+        # can infer probably
+        job_in=(False, '', None)
+        try:
+            if validate_linkedin_url(linkedin_url):
+                job_in = (True, 'linkedin', linkedin_url)
+            elif validate_linkedin_id(linkedin_id):
+                job_in = (True, 'linkedin', f'https://www.linkedin.com/jobs/view/{linkedin_id}')
+            elif validate_url(job_url):
+                job_in = (True, 'url', job_url)
+            elif validate_job_file_desc(job_file_desc):
+                job_in = (True, 'desc', job_file_desc)
+        except:
+            pass
+        parameters['job_desc']=job_in
+
+        parameters['llm_cheap'] = llm_cheap
+        EnvironmentKeys.set_key(key='llm_cheap', value=llm_cheap)
+        parameters['llm'] = llm
+        EnvironmentKeys.set_key(key='llm',value=llm)
 
         os.environ['DEBUG']=debug
         parameters['DEBUG']=debug
