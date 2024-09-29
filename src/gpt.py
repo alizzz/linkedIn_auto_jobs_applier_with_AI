@@ -15,9 +15,9 @@ from Levenshtein import distance
 from src.utils import EnvironmentKeys
 import src.strings as strings
 from src.job import Job
+from lib_resume_builder_AIHawk.config import GlobalConfig
 
 load_dotenv()
-
 
 class LLMLogger:
     
@@ -169,6 +169,7 @@ class GPTAnswerer:
         relevant = False
         job_desc = job.description
         try:
+
             prompt_is_relevant="""You are an experience HR professional and job desciption analyst. 
             Read the job description and thoroughly analyze it. Answer the question if this job is relevant to {relevance_criteria}. 
             Answer only the relevance and your confidence in the answer using the following valid json of the following format
@@ -385,7 +386,7 @@ class GPTAnswerer:
         return best_option
     
     def resume_or_cover(self, phrase: str) -> str:
-        # Define the prompt template
+        # Define the prompts template
         prompt_template = """
         Given the following phrase, respond with only 'resume' if the phrase is about a resume, or 'cover' if it's about a cover letter. Do not provide any additional information or explanations.
         

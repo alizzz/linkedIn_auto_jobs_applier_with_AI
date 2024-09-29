@@ -13,6 +13,8 @@ personal_information:
   linkedin: "[Your LinkedIn Profile URL]"
   years_technical_experience: "[Number of years]"
   years_mgmt_experience: "[Number of years]"
+  name_prefix: ""
+  name_suffix: ""
 
 education_details:
   - degree: "[Your Degree]"

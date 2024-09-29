@@ -2,8 +2,9 @@ import os
 import random
 import time
 import re
-
 from selenium import webdriver
+import json
+from collections import defaultdict
 
 chromeProfilePath = os.path.join(os.getcwd(), "chrome_profile", "linkedin_profile")
 
@@ -155,7 +156,36 @@ def printyellow(text):
     # Stampa il testo in giallo
     print(f"{YELLOW}{text}{RESET}")
 
+def process_items(input_json):
+    # Parse the input JSON into a list of dictionaries
+    items = None
+    if os.path.isfile(input_json):
+       with open(input_json, 'r', encoding='utf-8' ) as f:
+            items = json.load(f)
+    else:
+        items = json.loads(input_json)
 
+    # Dictionary to store the unique combinations of type and question
+    result_dict = defaultdict(lambda: {"repetitions": 0, "answers": set()})
+
+    # Iterate through each item and aggregate based on type and question
+    for item in items:
+        key = (item['type'], item['question'])  # Tuple of type and question
+        result_dict[key]["repetitions"] += 1  # Count occurrences
+        result_dict[key]["answers"].add(item['answer'])  # Add distinct answers
+
+    # Convert the result into the desired format
+    result_list = []
+    for (item_type, question), data in result_dict.items():
+        result_list.append({
+            "type": item_type,
+            "question": question,
+            "number_of_repetitions": data["repetitions"],
+            "answers": list(data["answers"])  # Convert set to list for JSON serialization
+        })
+    result_list = sorted(result_list, key=lambda x: x['number_of_repetitions'], reverse=True)
+    # Convert the final result to JSON
+    return result_list
 
 class EnvironmentKeys:
     def __init__(self):
