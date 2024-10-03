@@ -8,20 +8,37 @@ from pathlib import Path
 from urllib.parse import urlparse
 import yaml
 import click
+from dataclasses import dataclass
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import WebDriverException, TimeoutException
-from lib_resume_builder_AIHawk import Resume,StyleManager,FacadeManager,ResumeGenerator
+from selenium.webdriver.common.by import By
 from src.utils import chromeBrowserOptions
 from src.utils import printcolor, printyellow, printred
 from src.utils import EnvironmentKeys
-#from lib_resume_builder_AIHawk.utils import get_dict_names_from_dir
 from src.gpt import GPTAnswerer
 from src.linkedIn_authenticator import LinkedInAuthenticator
 from src.linkedIn_bot_facade import LinkedInBotFacade
 from src.linkedIn_job_manager import LinkedInJobManager
 from src.job_application_profile import JobApplicationProfile
+from src.file_manager import FileManager
+from src.config import linkedin_url_fmt
+from lib_resume_builder_AIHawk.utils import HTML_to_PDF
+from lib_resume_builder_AIHawk import Resume,StyleManager,FacadeManager,ResumeGenerator
+#from lib_resume_builder_AIHawk.utils import get_dict_names_from_dir
+
+
+from string import Template
+from typing import Any
+from lib_resume_builder_AIHawk.gpt_resume import LLMResumer
+from lib_resume_builder_AIHawk.gpt_resume_job_description import LLMResumeJobDescription
+from lib_resume_builder_AIHawk.module_loader import load_module
+from lib_resume_builder_AIHawk.config import global_config
+
+
+import os
+import re
 
 import context
 
@@ -60,17 +77,18 @@ class ConfigValidator:
             'locations': list,
             'distance': int,
             'companyBlacklist': list,
-            'titleBlacklist': list
+            'titleBlacklist': list,
+            'companyWhitelist':list
         }
 
         for key, expected_type in required_keys.items():
             if key not in parameters:
-                if key in ['companyBlacklist', 'titleBlacklist']:
+                if key in ['companyBlacklist', 'titleBlacklist', 'companyWhitelist']:
                     parameters[key] = []
                 else:
                     raise ConfigError(f"Missing or invalid key '{key}' in config file {config_yaml_path}")
             elif not isinstance(parameters[key], expected_type):
-                if key in ['companyBlacklist', 'titleBlacklist'] and parameters[key] is None:
+                if key in ['companyBlacklist', 'titleBlacklist', 'companyWhitelist'] and parameters[key] is None:
                     parameters[key] = []
                 else:
                     raise ConfigError(f"Invalid type for key '{key}' in config file {config_yaml_path}. Expected {expected_type}.")
@@ -127,46 +145,7 @@ class ConfigValidator:
 
         return secrets['email'], str(secrets['password']), secrets['openai_api_key']
 
-class FileManager:
-    @staticmethod
-    def find_file(name_containing: str, with_extension: str, at_path: Path) -> Path:
-        return next((file for file in at_path.iterdir() if name_containing.lower() in file.name.lower() and file.suffix.lower() == with_extension.lower()), None)
 
-    @staticmethod
-    def validate_data_folder(app_data_folder: Path, required_dict: dict = None, jobs_folder: str=None) -> tuple:
-        if not app_data_folder.exists() or not app_data_folder.is_dir():
-            raise FileNotFoundError(f"Data folder not found: {app_data_folder}")
-
-        if required_dict is None:
-            required_dict = {
-                'plain_resume': 'plain_text_resume.yaml',
-                'secrets': 'secrets.yaml',
-                'config': 'config.yaml'
-            }
-        #required_files = ['secrets.yaml', 'config.yaml', 'plain_text_resume.yaml']
-        missing_files = [file for file in required_dict.values() if not (app_data_folder / file).exists()]
-        if missing_files:
-            raise FileNotFoundError(f"Missing files in the data folder: {', '.join(missing_files)}")
-
-        output_folder = app_data_folder / 'output'
-        output_folder.mkdir(exist_ok=True)
-
-        print(f"loading config files: {','.join(required_dict.values())}")
-        return (app_data_folder / required_dict["secrets"], app_data_folder / required_dict["config"], app_data_folder / required_dict["plain_resume"], output_folder)
-
-    @staticmethod
-    def file_paths_to_dict(resume_file: Path | None, plain_text_resume_file: Path) -> dict:
-        if not plain_text_resume_file.exists():
-            raise FileNotFoundError(f"Plain text resume file not found: {plain_text_resume_file}")
-
-        result = {'plainTextResume': plain_text_resume_file}
-
-        if resume_file:
-            if not resume_file.exists():
-                raise FileNotFoundError(f"Resume file not found: {resume_file}")
-            result['resume'] = resume_file
-
-        return result
 
 def init_browser() -> webdriver.Chrome:
     try:
@@ -178,54 +157,21 @@ def init_browser() -> webdriver.Chrome:
 
 def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_key: str):
     try:
-        style_manager = StyleManager(styles_file=parameters['css'])
-        resume_generator = ResumeGenerator()
-        with open(parameters['uploads']['plainTextResume'], "r", encoding='iso-8859-1') as file:
-            plain_text_resume = file.read()
-        resume_object = Resume(plain_text_resume)
-        resume_generator_manager = FacadeManager(openai_api_key, style_manager, resume_generator, resume_object, Path("data_folder/output"))
-        os.system('cls' if os.name == 'nt' else 'clear')
-        resume_generator_manager.choose_style()
-        os.system('cls' if os.name == 'nt' else 'clear')
-        
-        job_application_profile_object = JobApplicationProfile(plain_text_resume)
-        
         browser = init_browser()
-        login_component = LinkedInAuthenticator(browser)
-        apply_component = LinkedInJobManager(browser)
-        gpt_answerer_component = GPTAnswerer(openai_api_key)
-        bot = LinkedInBotFacade(login_component, apply_component)
-        bot.set_secrets(email, password)
-        bot.set_job_application_profile_and_resume(job_application_profile_object, resume_object)
-        bot.set_gpt_answerer_and_resume_generator(gpt_answerer_component, resume_generator_manager)
-        bot.set_parameters(parameters)
-
-        _jobs_folder = parameters['jobs']
-        user_dir = 'name_s'
-        try:
-            user_dir = f'{bot.resume.personal_information.name}_{bot.resume.personal_information.surname[0]}'
-        except:
-            pass
-        jobs_folder = Path(parameters['outputFileDirectory'], _jobs_folder if _jobs_folder is not None else 'Jobs', user_dir)
-        os.makedirs(jobs_folder, exist_ok=True)
-
-        parameters['outputJobsDirectory'] = jobs_folder.__str__()
-        os.environ["OUTPUT_JOBS_DIRECTORY"]=jobs_folder.__str__()
-
-        bot.start_login()
+        bot = LinkedInBotFacade.create_bot(email=email, openai_api_key= openai_api_key, parameters= parameters, browser=browser, password = password)
 
         job_desc = parameters['job_desc']
         if job_desc[0]:
             if job_desc[1]=='linkedin':
                 try:
                     job_desc_id = job_desc[2].split('/')[-1]
-                    _file_name = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.{job_desc_id}.Resume'
-                    pdf64 = resume_generator_manager.pdf_base64(job_description_url = job_desc[2], job_description_text = None,
-                                                                html_file_name=os.path.join(jobs_folder, f'{_file_name}.html'), delete_html_file=False)
+                    _file_name = f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}.{job_desc_id}.Resume'
+                    pdf64 = bot.apply_component.resume_generator_manager.pdf_base64(job_description_url = job_desc[2], job_description_text = None,
+                                                                html_file_name=os.path.join(bot.jobs_folder, f'{_file_name}.html'), delete_html_file=False)
 
                     pdf_data = base64.b64decode(pdf64)
 
-                    with open(os.path.join(jobs_folder, f'{_file_name}.pdf'), "xb") as f:
+                    with open(os.path.join(bot.jobs_folder, f'{_file_name}.pdf'), "xb") as f:
                         f.write(pdf_data)
                 except Exception as e:
                     print(f"Exception generating resume from url {job_desc[2]}. Error {e}")
@@ -237,6 +183,15 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
         print(f"WebDriver error occurred: {e}")
     except Exception as e:
         raise RuntimeError(f"Error running the bot: {str(e)}")
+
+
+#call browser = init_browser() prior to create_bot
+def create_bot(email, openai_api_key, parameters, password, browser):
+    bot = LinkedInBotFacade.create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password, browser=browser)
+    os.makedirs(bot.jobs_folder, exist_ok=True)
+    parameters['outputJobsDirectory'] = bot.jobs_folder.__str__()
+    os.environ["OUTPUT_JOBS_DIRECTORY"] = bot.jobs_folder.__str__()
+    return bot
 
 
 def validate_url(url):
@@ -268,15 +223,133 @@ def validate_linkedin_url(url: str):
         pass
     return False
 
+def lkdn_url(data:str=None):
+    if validate_linkedin_url(data): return data
+    if validate_linkedin_id(data):
+        return linkedin_url_fmt.format(id=data)
+
 def validate_job_file_desc(job_file_desc):
     if job_file_desc is None or len(job_file_desc)==0: return False
     if os.path.exists(job_file_desc):
         return True
     return False
 
+def html_2_pdf(resume_file, overwrite=False):
+    try:
+        dir, file = os.path.split(resume_file)
+        pdf_file = os.path.join(dir, f'{file.rsplit('.',1)[0]}.pdf')
+        if os.path.exists(pdf_file):
+                if not overwrite:
+                    print(f'PDF file {pdf_file} exists and overwrite flag is {overwrite}. Skipping')
+                else:
+                    print(f'PDF file {pdf_file} exists and overwrite flag is {overwrite}. TBH')
+                return
+
+        pdf_b64 = base64.b64decode(HTML_to_PDF(resume_file))
+        with open(pdf_file, "xb") as f:
+            f.write(pdf_b64)
+    except Exception as e:
+        print(f'EXCEPTION: Failed to convert file to pdf. File: {resume_file}, error: {e}')
+
+def html_2_txt(resume_file, by=(None, None)):
+    try:
+        dir, file = os.path.split(resume_file)
+        txt_file = os.path.join(dir, f'{file.rsplit('.',1)[0]}.txt')
+        txt = HTML_to_PDF(resume_file, by=by)
+        with open(txt_file, "w") as f:
+            f.write(txt)
+    except Exception as e:
+        print(f'EXCEPTION: Failed to convert file to txt. File: {resume_file}, error: {e}')
+
+
+def dirwalk(path, ext='.html'):
+    file_list = []
+    for root, dir, files in os.walk(path):
+        for file in files:
+            if file.endswith(ext):
+                file_list.append((root, file))
+
+    return file_list
+
+def isdirfile(path)->(bool, bool):
+    dir:bool = False
+    file:bool = False
+    if not os.path.exists(path): return False, False
+    if os.path.isdir(path):
+        dir = True
+        file = False
+    elif os.path.isfile(path):
+        dir = False
+        file = True
+    return dir, file
+
+
+@dataclass
+class ClickParam():
+    resume:click.Path=None
+    plain:str=None
+    secret:str=None
+    config:str=None
+    jobs:str=None
+    data_folder:str=None
+    debug:str=None
+    css:str=None
+    resume_template:str=None
+    lkdn:str=None
+    job_url:str=None
+    linkedin_id:str=None
+    job_file_desc:str=None
+    llm_cheap:str=None
+    llm:str=None
+    src_html:str=None
+    easy_apply: bool = None
+    mode:str=None
+
+def convert_(clickParam:ClickParam ):
+    try:
+        src_html = clickParam.src_html
+
+        if src_html is not None:
+            overwrite = False
+            dir, file = isdirfile(src_html)
+            if not any([dir, file]):
+                src_html = os.path.join(os.path.dirname(__file__), src_html)
+                dir, file = isdirfile(src_html)
+                if not any([dir, file]):
+                    print(f'ERROR: html2pdf should be either a valid file or dir path. Passed {src_html}')
+                    return
+
+            if dir:
+                k = 0
+                list_files = dirwalk(src_html)
+                for dir, html_file in list_files:
+                    pdf_file = os.path.join(dir, f'{html_file.rsplit('.', 1)[0]}.pdf')
+                    if not os.path.exists(pdf_file) or overwrite:
+                        html_2_pdf(resume_file=os.path.join(dir, html_file))
+                        html_2_txt(resume_file=os.path.join(dir, html_file), by=(By.TAG_NAME, 'body'))
+                        print(f'{k}: Competed for {dir}')
+                        k += 1
+                pass
+            else:
+                html_2_pdf(resume_file=src_html)
+                html_2_txt(resume_file=src_html, by=(By.TAG_NAME, 'body'))
+    except Exception as e:
+        printred(f'Exception in convert. Error: {e}')
+
+    return
+
+def exit_(code:int=0, start_time:datetime.datetime=None, color:str='Blue'):
+    exec_time = ''
+    if start_time is not None: 
+        end_time = datetime.datetime.now()
+        exec_time = f' Execution time {end_time - start_time}'
+    
+    printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. {exec_time}',color)
+    exit(code)
 
 @click.command()
-@click.option('--resume', type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path), help="Path to the resume PDF file")
+#@click.option('--resume', type=click.Path(exists=False, file_okay=True, dir_okay=False, path_type=Path), help="Path to the resume PDF file")
+@click.option('--resume', type=str, default=None, help="Path to the resume PDF file")
 @click.option('--plain', type=str, default="plain_text_resume.yaml", help="Path to default plain text resume yaml file")
 @click.option('--secret', type=str, default="secrets.yaml", help="Path to default plain text resume yaml file")
 @click.option('--config', type=str, default="config.yaml", help="Path to default plain text resume yaml file")
@@ -285,15 +358,30 @@ def validate_job_file_desc(job_file_desc):
 @click.option('--debug', type=str, default='False', help='is application being debugged')
 @click.option('--css',type=str, default = 'style_hawk.css', help='path to a style sheet')
 @click.option('--resume_template',type=str, default = 'hawk_resume_template.html', help='file name resume template')
-@click.option('--linkedin_url', type=str, default=None, help="Linkedin URL to job description - requires linkedin login")
+@click.option('--lkdn', type=str, default=None, help="Linkedin URL to job description - requires linkedin login")
 @click.option('--job_url', type=str, default=None, help="URL to job description - can be read without logging in (non-linkedin)")
 @click.option('--linkedin_id', type=str, default=None, help="Jobid on linkedin. Requires logging in")
 @click.option('--job_file_desc', type=str, default=None, help="Text file that contains job description")
 @click.option('--llm_cheap', type=str, default='gpt-4o-mini', help="cheap LLM model to use for tasks")
 @click.option('--llm', type=str, default='gpt-4o', help="LLM model")
-def main(resume: Path = None, plain: str = None, secret: str = None, config: str = None, jobs: str=None, data_folder: str=None, debug:str=None, css:str=None, resume_template:str=None,
-         linkedin_url: str=None, job_url: str=None, linkedin_id: str = None, job_file_desc:str=None,
-         llm_cheap: str=None, llm: str=None):
+@click.option('--src_html', type=str, default=None, help="Run just conversion of html file to pdf. --resume option is required")
+@click.option('--easy_apply', is_flag=True, help='If shall continue to fill in easy_apply')
+@click.option('--mode', type=click.Choice(['search_apply', 'convert', 'resume_lkdin', 'apply_txt', 'apply_url', 'search_lkdin']), default='search_apply', help='Mode of operation choose one of - search and apply(default), convert html to pdf and text, apply one that is provide')
+def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_template,
+         lkdn, job_url, linkedin_id, job_file_desc, llm_cheap, llm, src_html, easy_apply, mode):
+
+    start_time = datetime.datetime.now()
+    printcolor(f'Process started @ {start_time.strftime("%Y-%m-%d %H:%M:%S")}', "Blue")
+
+    clickParam = ClickParam(resume, plain, secret, config, jobs, data_folder, debug, css, resume_template,
+                            lkdn, job_url, linkedin_id, job_file_desc, llm_cheap, llm, src_html, easy_apply, mode)
+
+
+    # <editor-fold desc="... process config parameters ...">
+    secrets_file=None
+    config_file=None
+    plain_text_resume_file=None
+    output_folder=None
 
     try:
         data_folder = Path(data_folder)
@@ -303,26 +391,86 @@ def main(resume: Path = None, plain: str = None, secret: str = None, config: str
             'config': config
         }
 
-        secrets_file, config_file, plain_text_resume_file, output_folder = FileManager.validate_data_folder(data_folder, config_dict, jobs_folder=jobs)
-        
+        secrets_file, config_file, plain_text_resume_file, output_folder = FileManager.validate_data_folder(data_folder,
+                                                                                                            config_dict,
+                                                                                                            jobs_folder=jobs)
+
         parameters = ConfigValidator.validate_config(config_file)
         email, password, openai_api_key = ConfigValidator.validate_secrets(secrets_file)
-        
+
         parameters['uploads'] = FileManager.file_paths_to_dict(resume, plain_text_resume_file)
         parameters['outputFileDirectory'] = output_folder.__str__()
         os.environ['OUTPUT_FILE_DIRECTORY'] = output_folder.__str__()
 
         parameters['jobs'] = jobs
         parameters['css'] = css
-        parameters['resume_template']=resume_template
+        parameters['resume_template'] = resume_template
         EnvironmentKeys.set_key('resume_template', resume_template)
 
+        parameters['llm_cheap'] = llm_cheap
+        EnvironmentKeys.set_key(key='llm_cheap', value=llm_cheap)
+        parameters['llm'] = llm
+        EnvironmentKeys.set_key(key='llm', value=llm)
+
+        os.environ['DEBUG'] = debug
+        parameters['DEBUG'] = debug
+        printcolor(f'DEBUG flag is set to {debug}', 'Red')
+        # </editor-fold>
+    except Exception as e:
+        printred(f'Failed while processing input paramters. Error: {e}')
+        exit_(100, start_time)
+    # </editor-fold>
+
+    #convert
+    if mode=='convert':
+        convert_(clickParam)
+        exit_(0, start_time)
+
+    if mode=='resume_lkdin':
+        print(f'In apply_lkdin. src={lkdn}')
+        if lkdn is None: 
+            printred(f'lkdn paramter is None. Should be either valid linkedin url or id. Aborting')
+            end_time = datetime.datetime.now()
+            printcolor(
+                f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time - start_time}',
+                "Blue")
+            exit_(201, start_time)
+
+        url=lkdn_url(lkdn)
+        browser = None
+        #try:
+        with init_browser() as browser:
+            bot = create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password, browser=browser)
+            bot.do_login()
+            bot.generate_resume_from_url(url)
+        #finally:
+        #    browser.close()
+        #    browser.quit()
+
+        exit_(0, start_time)
+
+    if mode=='search_lkdin':
+        exit_code=0
+
+        browser = init_browser()
+        bot = create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
+                         browser=browser)
+        bot.do_login()
+
+        n=0
+
+        #bot.generate_job_list_from_search(search_param)
+
+        exit_(exit_code, start_time)
+
+    #scan and apply
+    try:
         # only one (or none) of the job options are allowed. If more than one is specified, only the first valid one is used
         # can infer probably
         job_in=(False, '', None)
         try:
-            if validate_linkedin_url(linkedin_url):
-                job_in = (True, 'linkedin', linkedin_url)
+            if validate_linkedin_url(lkdn):
+                job_in = (True, 'linkedin', lkdn)
             elif validate_linkedin_id(linkedin_id):
                 job_in = (True, 'linkedin', f'https://www.linkedin.com/jobs/view/{linkedin_id}')
             elif validate_url(job_url):
@@ -332,15 +480,6 @@ def main(resume: Path = None, plain: str = None, secret: str = None, config: str
         except:
             pass
         parameters['job_desc']=job_in
-
-        parameters['llm_cheap'] = llm_cheap
-        EnvironmentKeys.set_key(key='llm_cheap', value=llm_cheap)
-        parameters['llm'] = llm
-        EnvironmentKeys.set_key(key='llm',value=llm)
-
-        os.environ['DEBUG']=debug
-        parameters['DEBUG']=debug
-        printcolor(f'DEBUG flag is set to {debug}','Red')
 
         create_and_run_bot(email, password, parameters, openai_api_key)
     except ConfigError as ce:
@@ -359,5 +498,7 @@ def main(resume: Path = None, plain: str = None, secret: str = None, config: str
         print(f"An unexpected error occurred: {str(e)}")
         print("Refer to the general troubleshooting guide: https://github.com/feder-cr/LinkedIn_AIHawk_automatic_job_application/blob/main/readme.md#configuration")
 
+    end_time = datetime.datetime.now()
+    printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time-start_time}', "Blue")
 if __name__ == "__main__":
     main()

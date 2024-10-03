@@ -5,6 +5,7 @@ import re
 from selenium import webdriver
 import json
 from collections import defaultdict
+from lib_resume_builder_AIHawk.utils import HTML_to_PDF
 
 chromeProfilePath = os.path.join(os.getcwd(), "chrome_profile", "linkedin_profile")
 
@@ -94,6 +95,7 @@ def chromeBrowserOptions():
 def make_valid_os_path_string(path_string: str, invalid_chars: str=r'[<>:"/\\|?*,\s+]', repl: str='_'):
     return make_valid_path(path_string, invalid_chars, repl)
 def make_valid_path(path_string: str, invalid_chars: str=r'[<>:"/\\|?*,\s+]', repl: str='_') -> str:
+    if path_string is None: return ''
     """
     Converts a given string into a valid folder name by replacing or removing invalid characters.
     Invalid characters are replaced with underscores, and leading/trailing spaces are trimmed.
@@ -142,6 +144,17 @@ def printcolor(text, color="none", intensity="none"):
     COLOR = f"\033[{_color+_offset}m"
     print(f"{COLOR}{text}{RESET}")
 
+def get_state_from_loc(loc, pattern = r",?\s([A-Z]{2})$|,\s([A-Za-z\s]+)$", valid_path = True):
+    try:
+        match = re.search(pattern, loc)
+        if match:
+            return match.group(1) or match.group(2)  # Return the first matching group (abbreviation or full name)
+        else:
+            return make_valid_path(loc) if valid_path else loc
+    except Exception as e:
+        printred(f'Failed get_state_from loc. Loc={loc}, error = {e}')
+    return loc  # Return None if no match is found
+
 def printred(text):
     # Codice colore ANSI per il rosso
     RED = "\033[91m"
@@ -163,7 +176,7 @@ def process_items(input_json):
        with open(input_json, 'r', encoding='utf-8' ) as f:
             items = json.load(f)
     else:
-        items = json.loads(input_json)
+        items = json.loads(input_json, strict=False)
 
     # Dictionary to store the unique combinations of type and question
     result_dict = defaultdict(lambda: {"repetitions": 0, "answers": set()})

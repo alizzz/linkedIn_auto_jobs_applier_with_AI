@@ -35,4 +35,6 @@ distance: 100
 companyBlacklist:
  - Harnham
 
+companyWhitelist:
+
 titleBlacklist:

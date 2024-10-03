@@ -10,6 +10,8 @@ from typing import List, Optional, Any, Tuple
 import re
 import json
 from selenium.common.exceptions import NoSuchElementException
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 import src.utils as utils
 from src.utils import EnvironmentKeys
@@ -18,7 +20,7 @@ from src.job import Job
 from src.utils import make_valid_path, make_valid_os_path_string, EnvironmentKeys
 from src.linkedIn_easy_applier import LinkedInEasyApplier
 from lib_resume_builder_AIHawk.config import global_config
-from CustomExceptions import NotRelevantError
+from CustomExceptions import NotRelevantError, NoJobsOnPageError
 from urllib.parse import quote
 
 load_dotenv()
@@ -231,10 +233,9 @@ class LinkedInJobManager:
         else:
             loc = f'&geoid={geoid}'
         return loc
-    def start_applying(self, max_pages_per_location=5):
+    def start_applying(self, max_pages_per_location=15):
         self.easy_applier_component = LinkedInEasyApplier(self.driver, self.resume_path, self.set_old_answers, self.gpt_answerer, self.resume_generator_manager)
-        searches = list(product(self.positions, self.locations))
-        random.shuffle(searches)
+        searches = self.get_searches()
         page_sleep = 0
         minimum_time = 60 * 3
         minimum_page_time = time.time() + minimum_time
@@ -308,6 +309,146 @@ class LinkedInJobManager:
                 utils.printyellow(f"Sleeping for {sleep_time / 60} minutes.")
                 time.sleep(sleep_time)
                 page_sleep += 1
+
+        printcolor(f'Jobs processed: {jobs_stat_run}', 'Magenta')
+
+    def get_searches(self):
+        searches = list(product(self.positions, self.locations))
+        random.shuffle(searches)
+        return searches
+
+
+    def get_jobs_from_search(self, position, location, max_pages_per_location=15, job_stat_search = None, page_sleep=0):
+        location_url = self.get_location_url(location=location)
+        if job_stat_search is None:
+            job_stat_search = {
+                'completed': 0,
+                'found': 0,
+                'already_processed': 0,
+                'blacklisted': 0,
+                'not_relevant': 0
+            }
+        job_page_number = -1
+        utils.printyellow(f"Starting the search for {position} in {location}.")
+
+        os.makedirs(os.path.join(EnvironmentKeys.get_key('OUTPUT_JOBS_DIRECTORY', False), make_valid_path(location)),
+                    exist_ok=True)
+        job_list:[Job]=None
+        while True:
+            page_sleep += 1
+            job_page_number += 1
+            if job_page_number > max_pages_per_location:
+                break
+            utils.printyellow(f"Going to search page {job_page_number} for {position} in {location}")
+            self.next_job_page(position, location_url, job_page_number)
+
+            if self.is_no_more_jobs_found():
+                printcolor(
+                    f"No more matching jobs found for {position} in {location}\nFound {jobs_stat_search['found']}. Processed: {jobs_stat_search['completed']}. Skipped: {jobs_stat_search['already_processed'] + jobs_stat_search['blacklisted'] + jobs_stat_search['not_relevant']}: (Already Processed: {jobs_stat_search['already_processed']}. Blacklisted:{jobs_stat_search['blacklisted']}, Not relevant: {jobs_stat_search['not_relevant']})",
+                    'magenta')
+                break
+
+            job_list = self.build_job_list(job_list)
+
+            utils.printyellow(
+                f"Loaded search page {job_page_number} position: {position}, location_url: {location_url}")
+            time.sleep(random.uniform(1.5, 3.5))
+            utils.printyellow(
+                    f"Starting the application process for the search page {job_page_number} for {position} in {location}...")
+
+            return job_list
+
+
+
+    def load_job_from_url(self, job_url):
+        job = Job(id=os.path.split(job_url)[1], link=job_url)
+        #company_name=None
+        #title=None
+        #loc_raw=None
+        #desc_list=None
+        #job_description = ''
+        #apply_method = 'unk'
+        #salary=''
+        #skills=[]
+        #office_policy='unk'
+        #experience_level = 'unk'
+        #location = 'unk'
+
+        try:
+            self.driver.get(job_url)
+            WebDriverWait(self.driver, 10).until(
+                lambda driver: driver.execute_script("return document.readyState") == "complete"
+            )
+            time.sleep(random.uniform(1.0, 3.0))
+        except Exception as e:
+            pass
+        try:
+            job.company = self.driver.find_element(By.CLASS_NAME,
+                                                                    "job-details-jobs-unified-top-card__company-name").text.strip()
+
+        except Exception as e:
+            pass
+        try:
+            job.title = self.driver.find_element(By.CLASS_NAME,"job-details-jobs-unified-top-card__job-title").text.strip()
+        except Exception as e:
+            pass
+
+        try:
+            job.location = self.driver.find_element(By.CLASS_NAME,
+                                                               "job-details-jobs-unified-top-card__primary-description-container").find_element(
+                By.TAG_NAME, 'span').text
+        except Exception as e:
+            pass
+        try:
+            #not really useful
+            desc_list = [x.text for x in self.driver.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__primary-description-container").find_elements(By.TAG_NAME, 'span')]
+        except Exception as e:
+            pass
+        try:
+            html = self.driver.find_element(By.ID, "job-details").get_attribute('innerHTML')
+            #remove html tags
+            clean_tags = re.compile('<.*?>')
+            jd_ = re.sub(clean_tags, '', html)
+            #remove extra \n and white space
+            job.description = re.sub(r'\s+', ' ', jd_).strip()
+        except Exception as e:
+            printred(f'Error while extracting job description. Error {e}')
+        try:
+            artdeco_buttons_list = self.driver.find_elements(By.CLASS_NAME, "artdeco-button__text")
+            if 'apply' in [s.text.lower() for s in artdeco_buttons_list]:
+                job.apply_method='Apply'
+            elif 'easy apply' in [s.text.lower() for s in artdeco_buttons_list]:
+                job.apply_method = 'Easy Apply'
+        except Exception as e:
+            pass
+        try:
+            job.salary = self.driver.find_element(By.CLASS_NAME, "jobs-details__salary-main-rail-card").text
+        except Exception as e:
+            pass
+        try:
+            skills = ','.join([x.text for x in
+                       self.driver.find_element(By.CLASS_NAME, "pt5").find_elements(By.TAG_NAME, "a")])
+
+        except Exception as e:
+            pass
+        try:
+            job.skills = re.sub(r'\s+and\s+', ' ', skills).split(',')
+        except Exception as e:
+            pass
+        try:
+            job_insight_list = [x.text for x in self.driver.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__job-insight").find_elements(By.TAG_NAME, 'span')]
+            #['$203K/yr - $317K/yr Hybrid Full-time Executive', '$203K/yr - $317K/yr', 'Hybrid', 'Full-time', 'Executive'
+            for x in job_insight_list[1:]:
+                if '$' in x:
+                    job.salary = x
+                elif x.lower() in ['hybrid', 'remote','on-site'] :
+                    job.office_policy = x
+                elif x.lower() in ['internship', 'level', 'associate', 'director', 'executive']:
+                    job.experience_level = x
+        except Exception as e:
+            pass
+
+        return job
 
     def build_job_list(self, job_list: List[Job]=None, search_location: str=None, search_position: str=None):
         if job_list is None: job_list = []
@@ -421,7 +562,7 @@ class LinkedInJobManager:
                 #self.write_to_status_log_json(job, "skipped")
                 continue
             try:
-                if job.apply_method not in {"Continue", "Applied", "Apply"}:
+                if job.apply_method not in {"Continue", "Applied"}:
                     self.easy_applier_component.job_apply(job)
                     utils.printcolor(f"COMPLETED: Has completed {job.title} at {job.company}, jobid: {job.id}", 'Blue')
                     self.write_to_json(job.base_loc_path, data=job.json, name='success')

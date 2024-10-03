@@ -41,7 +41,9 @@ class LinkedInEasyApplier:
 
 
     def _load_questions_from_json(self) -> List[dict]:
-        output_file = 'answers.json'
+        dir = os.environ.get('OUTPUT_JOBS_DIRECTORY')
+        output_file = os.path.join(dir,'answers.json')
+
         try:
             try:
                 with open(output_file, 'r') as f:
@@ -319,7 +321,7 @@ class LinkedInEasyApplier:
                 letter_path = self._create_and_upload_cover_letter(element)
 
     def create_backup_file_name(self, file_directory, file_name, file_extension=None):
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
         # Create a new file name with the timestamp
         if file_extension is None:
             file_name_with_timestamp = f"{file_name}_{timestamp}"
@@ -409,7 +411,7 @@ class LinkedInEasyApplier:
         # if job.pdf_file is None or len(job.pdf_file)==0 or os.path.exists(job.pdf_file)==False:
         if not job.resume.created:
             pdf_file_path = self._create_resume(job)
-            if pdf_file_path is None or len(pdf_file_path)==0:
+            if pdf_file_path is not None or len(pdf_file_path)>0:
                 job.resume.created=True
         else:
             pdf_file_path = job.resume.pdf

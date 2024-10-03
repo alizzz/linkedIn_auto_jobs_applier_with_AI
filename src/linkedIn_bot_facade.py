@@ -3,6 +3,16 @@ import datetime
 import base64
 import os
 import traceback
+import json
+from pathlib import Path
+from src.gpt import GPTAnswerer
+from src.linkedIn_authenticator import LinkedInAuthenticator
+from src.linkedIn_job_manager import LinkedInJobManager
+from src.job_application_profile import JobApplicationProfile
+from lib_resume_builder_AIHawk.utils import HTML_to_PDF
+from lib_resume_builder_AIHawk import Resume,StyleManager,FacadeManager,ResumeGenerator
+from src.utils import make_valid_path
+
 
 class LinkedInBotState:
     def __init__(self):
@@ -22,15 +32,48 @@ class LinkedInBotState:
                 raise ValueError(f"{key.replace('_', ' ').capitalize()} must be set before proceeding.")
 
 class LinkedInBotFacade:
-    def __init__(self, login_component, apply_component):
+    def __init__(self, login_component, apply_component, parameters = None, password = None, email=None, resume=None):
         self.login_component = login_component
         self.apply_component = apply_component
         self.state = LinkedInBotState()
         self.job_application_profile = None
-        self.resume = None
-        self.email = None
-        self.password = None
-        self.parameters = None
+        self.resume = resume
+        self.email = email
+        self.password = password
+        self.parameters = parameters
+
+    @staticmethod
+    def create_bot(email, openai_api_key, parameters, password, browser):
+        style_manager = StyleManager(styles_file=parameters['css'])
+        resume_generator = ResumeGenerator()
+        with open(parameters['uploads']['plainTextResume'], "r", encoding='iso-8859-1') as file:
+            plain_text_resume = file.read()
+        resume_object = Resume(plain_text_resume)
+        #ToDo - replace hardcoded string with config parameter
+        resume_generator_manager = FacadeManager(openai_api_key, style_manager, resume_generator, resume_object,
+                                                 Path("data_folder/output"))
+        resume_generator_manager.choose_style()
+        job_application_profile_object = JobApplicationProfile(plain_text_resume)
+        login_component = LinkedInAuthenticator(browser)
+        apply_component = LinkedInJobManager(browser)
+        gpt_answerer_component = GPTAnswerer(openai_api_key)
+        bot = LinkedInBotFacade(login_component, apply_component)
+        bot.set_secrets(email, password)
+        bot.set_job_application_profile_and_resume(job_application_profile_object, resume_object)
+        bot.set_gpt_answerer_and_resume_generator(gpt_answerer_component, resume_generator_manager)
+        bot.set_parameters(parameters)
+        return bot
+
+    @property
+    def jobs_folder(self):
+        _jobs_folder = self.parameters['jobs']
+        user_dir = 'name_s'
+        try:
+            user_dir = f'{self.resume.personal_information.name}_{self.resume.personal_information.surname[0]}'
+        except:
+            pass
+        return Path(self.parameters['outputFileDirectory'], _jobs_folder if _jobs_folder is not None else 'Jobs',
+                           user_dir)
 
     def set_job_application_profile_and_resume(self, job_application_profile, resume):
         self._validate_non_empty(job_application_profile, "Job application profile")
@@ -60,7 +103,7 @@ class LinkedInBotFacade:
         self.apply_component.set_parameters(parameters)
         self.state.parameters_set = True
 
-    def start_login(self):
+    def do_login(self):
         self.state.validate_state(['credentials_set'])
         self.login_component.set_secrets(self.email, self.password)
         self.login_component.start()
@@ -93,29 +136,59 @@ class LinkedInBotFacade:
                 if os.path.exists(file):
                     with open(file, 'r') as f:
                         text = f.read()
-                        _file_name = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.Resume.frm_file'
+                        _file_name = f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}.Resume.frm_file'
                         self._generate_resume(url=None, text=text, file_name_out=_file_name)
                 else:
                     print(f"WARNING: File doesn't exist. In generate_resume_from_src reading from file {file}")
             except Exception as e:
                 print(f'Exception: In generate_resume_from_src reading from file {file} Error {e}')
         elif text is not None:
-            _file_name = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.Resume.frm_txt'
+            _file_name = f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}.Resume.frm_txt'
             self._generate_resume(url=None, text=text, file_name_out=_file_name)
 
-    def generate_resume_from_url(self, url, is_linkedin:bool=True):
-        if is_linkedin:
-            self.start_login()
-            job_desc_id = url.split('/')[-1]
-            _file_name = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.{job_desc_id}.Resume'
+    #This method has a few side effects
+    #0. It creates an output directory if it doesn't exist
+    #1. it creates at writes resume html
+    #2. it creates and writes resume pdf
+    #3. it writes job json
+    #4. it writes job summary
+    def generate_resume_from_url(self, url, relevant_only=False, is_linkedin:bool=True):
+        job = self.apply_component.load_job_from_url(url)
+        is_relevant = self.apply_component.gpt_answerer.is_relevant_job(job)
+
+        fn_resume = f'{self.resume.personal_information.name}_{self.resume.personal_information.surname[0]}.Resume'
+        #fn_job_desc = f'{job.fname}.job.desc.{make_valid_path(job.apply_method)}.txt'
+        fn_job_desc = f'job.desc.{make_valid_path(job.apply_method)}.{job.is_relevant_str}.txt'
+        fn_job_json = f'job.{job.id}.json'
+        out_path = job.path
+
+        if relevant_only and not is_relevant:
+            print(f'Relevant_only is {relevant_only} and job relevancy is {job.is_relevant_str}. Skipping resume generation for url {url}, jobid={job.id}')
         else:
-            _file_name = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.Resume'
+            self._generate_resume(url=None, text=job.description, file_name_out=fn_resume, path=out_path)
+            if job.job_description_summary is None or len(job.job_description_summary) == 0:
+                jd_summary = self.apply_component.gpt_answerer.summarize_job_description(job.description)
+                job.set_job_description_summary(jd_summary)
 
-        self._generate_resume(url=url, text=None, file_name_out=_file_name)
 
-    def _generate_resume(self, url=None, text=None, file_name_out=None):
+        os.makedirs(out_path, exist_ok=True)
+        #if not (os.path.exists(os.path.join(out_path, fn_job_desc))):
+        with open(os.path.join(out_path, fn_job_desc), 'w', encoding='utf-8') as f:
+            f.write('\n**************  JOB DESCRIPTION SUMMARY  **********************\n')
+            f.write(job.job_description_summary)
+            f.write('\n***************************************************************\n')
+            f.write('\n**************  JOB DESCRIPTION RAW  **************************\n')
+            f.write(job.description)
+
+        with open(os.path.join(out_path, fn_job_json, encoding='utf-8'), 'w') as f:
+            json.dump(job.json, f)
+        print(f'Finished generating resume for {job.fname } from url {url}')
+
+    def _generate_resume(self, url=None, text=None, file_name_out=None, path=None):
         try:
-            output_folder = os.environ.get('OUTPUT_JOBS_DIRECTORY')
+            output_folder = os.environ.get('OUTPUT_JOBS_DIRECTORY') if path is None else path
+            if not os.path.exists(output_folder):
+                os.makedirs(output_folder, exist_ok=True)
             pdf64 = self.apply_component.resume_generator_manager.pdf_base64(job_description_url=url,
                                                                              job_description_text=text,
                                                                              html_file_name=os.path.join(output_folder,
@@ -129,3 +202,7 @@ class LinkedInBotFacade:
         except Exception as e:
             print(f"Exception generating resume from url {url}. Error {e}")
             print(f'Traceback {traceback.format_exc()}')
+
+    def generate_job_list_from_search(self, search_param):
+
+        pass

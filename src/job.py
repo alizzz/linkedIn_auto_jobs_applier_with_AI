@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import pathlib
 from src.utils import printcolor,printred,printyellow
 from src.utils import EnvironmentKeys
-from src.utils import make_valid_os_path_string
+from src.utils import make_valid_os_path_string, make_valid_path, get_state_from_loc
 
 @dataclass
 class DocSet:
@@ -98,6 +98,7 @@ class Job:
     is_relevant_confidence: str='unk'
     industry: str = 'unk'
     family: str='unk'
+    experience_level:str=''
     _user_path: str = None
     _applied: str = 'unk'
     _abbreviated_position: str= None
@@ -105,6 +106,7 @@ class Job:
     _date_time: datetime.datetime = None
     _search_location: str=None
     _search_position: str=None
+    _salary: str=None
     #base_path: str = ''
     #pdf_file: str = ""
     #html_file: str = ""
@@ -123,11 +125,13 @@ class Job:
     def __post_init__(self):
         if id == "": self.set_id_from_link(self.link)
         self.set_office_policy(Job.get_office_policy_from_raw_location(self.location_raw))
-        self.location=Job.get_location_from_raw(self.location_raw)
-        self.title=self.title.split('\n')[0].strip()
+        self.location=Job.get_location_from_raw(self.location_raw) if (self.location is None or len(self.location)==0) else self.location
+        self.title=self.title.split('\n')[0].strip() if self.title is not None else ''
         self.resume = DocSet('resume')
         self.job_docset=DocSet('job')
         self.cover = DocSet('cover')
+        #self._created=datetime.datetime.now()
+        self.set_date_time()
 
     def get_json_string(self)->str:
         data = {
@@ -138,6 +142,8 @@ class Job:
             "job_location": self.location,
             "office_policy": self.office_policy,
             "job_compensation": self.compensation,
+            "is_relevant":self.is_relevant_str,
+            "relevant_confidence":self.is_relevant_confidence,
             "applied": self.is_applied,
             "easy_apply": self.is_easyApply,
             "link": self.link,
@@ -162,7 +168,7 @@ class Job:
         office_policy = 'unk'
 
         if location is None or len(location)==0:
-            print(f'Unable to set office policy location is None or zero length')
+            #print(f'Unable to set office policy location is None or zero length')
             return office_policy
 
         #print(f'Extracting office policy from {location}')
@@ -196,8 +202,11 @@ class Job:
             "base_path": self.base_loc_path,
             "skills": self.skills,
             "quals": self.quals,
+            "relevancy": self.is_relevant_str,
             "is_relevant": self.is_relevant,
             "is_relevant_confidence": self.is_relevant_confidence,
+            "job_desc": self.description,
+            "job_desc_summary": self.job_description_summary,
             "industry": self.industry,
             "job_family": self.family,
             "job_desc_file": self.job_docset.txt,
@@ -209,6 +218,10 @@ class Job:
     #def base_path(self):
 
     @property
+    def is_relevant_str(self):
+        if self.relevancy is None or self.relevancy=='unk': return 'relev_unk'
+        return 'relevant' if self.is_relevant else 'not_relevant'
+    @property
     def is_relevant(self) ->bool:
         if self.relevancy is None:
             return False
@@ -219,26 +232,33 @@ class Job:
     @property
     def abbreviated_position(self):
         if (self._abbreviated_position is None or len(self._abbreviated_position)==0):
-            return "nnn"
+            return make_valid_path(self.title) if self.title is not None else 'Pos_'
         else:
             return self._abbreviated_position
 
+    @staticmethod
+    def _get_truncated(str, delim=r'[,\-\s;:\\/()]+', unk='unk'):
+        if str is None or len(str)==0: return unk
+        delim = r'[,\-\s;:\\/()]+'
+        # Use regular expression to split by spaces, commas, dashes, semicolons, and colons
+        # The pattern includes: space (\s), comma (,), dash (-), semicolon (;), colon (:)
+        parts = re.split(delim, str)
+        # Remove any empty strings from the resulting list
+        parts = [part for part in parts if part]
+        return parts[0]
+
     def get_truncated_co_name(self):
-        return self.truncated_co_name
-    @property
-    def truncated_co_name(self):
         if self._truncated_company_name is not None:
             return  self._truncated_company_name
 
         if self.company is None or len(self.company)==0:
-            return 'ccc'
-        delim = r'[,\-\s;:\\/()]+'
-        # Use regular expression to split by spaces, commas, dashes, semicolons, and colons
-        # The pattern includes: space (\s), comma (,), dash (-), semicolon (;), colon (:)
-        parts = re.split(delim, self.company)
-        # Remove any empty strings from the resulting list
-        parts = [part for part in parts if part]
-        return parts[0]
+            return 'co_'
+
+        return Job._get_truncated(self.company, unk='co_')
+
+    @property
+    def truncated_co_name(self):
+        return self.get_truncated_co_name()
 
     @property
     def date_time_string(self):
@@ -249,9 +269,9 @@ class Job:
         if fmt is not None:
             return self._date_time.strftime(fmt)
         if ms:
-            return self._date_time.strftime("%Y%m%d_%H%M%S.%f")[:-3]
+            return self._date_time.strftime("%Y-%m-%d_%H%M%S.%f")[:-3]
 
-        return self._date_time.strftime("%Y%m%d_%H%M%S")
+        return self._date_time.strftime("%Y-%m-%d_%H%M%S")
 
     def set_date_time(self, overwrite=False):
         if overwrite or self._date_time is None:
@@ -262,9 +282,24 @@ class Job:
     def path(self):
         return self.get_path()
     def get_path(self):
-        self.set_date_time() # setting it only if it has not been set before
-        name = f'{self.date_time_string}.{self.truncated_co_name}.{self._abbreviated_position}.{self.id}'
-        return os.path.join(self.base_loc_path, name)
+        name = self.get_fname()
+        loc = make_valid_path(get_state_from_loc(self.location)) if self.location is not None else 'loc_unk'
+
+        if name is None:
+            return self.base_loc_path
+        else:
+            return os.path.join(self.base_loc_path, self.is_relevant_str, loc, name)
+
+    def get_fname(self):
+        self.set_date_time()  # setting it only if it has not been set before
+        office_policy = f'.{self.office_policy}' if self.office_policy.lower() in ['remote', 'hybrid'] else ''
+        co_name = f'.{self.truncated_co_name}' if self.truncated_co_name is not None else '.Co_'
+        pos = f'.{self.abbreviated_position}'
+        fname = f'{self.date_time_string}{co_name}{pos}{office_policy}.{self.id}'
+        return fname
+    @property
+    def fname(self):
+        return self.get_fname()
 
     @staticmethod
     def get_base_path():
@@ -279,7 +314,19 @@ class Job:
         return self.get_base_loc_path()
 
     def get_base_loc_path(self):
-        base_loc_path = os.path.join(Job.get_base_path(), make_valid_os_path_string(self.search_location))
+        loc = None
+        if self.search_location is not None and len(self.search_location)>0:
+            loc = self.search_location
+        elif self.location is not None and len(self.location)>0:
+            loc_split = self.location.split(',')
+            if len(loc_split)>1:
+                loc = loc_split[1].strip()
+
+        if loc is None:
+            base_loc_path = Job.get_base_path()
+        else:
+            base_loc_path = os.path.join(Job.get_base_path(), make_valid_os_path_string(self.search_location))
+
         os.makedirs(base_loc_path, exist_ok=True)
         return base_loc_path
     @property

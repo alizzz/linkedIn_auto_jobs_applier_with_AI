@@ -188,7 +188,7 @@ class GPTAnswerer:
             prompt = ChatPromptTemplate.from_template(prompt_sanitize_template)
             chain = prompt | self.llm_cheap | StrOutputParser()
             output = chain.invoke({"relevance_criteria": relevance_criteria, "job_desc": job_desc})
-            j = json.loads(output)
+            j = json.loads(output, strict=False)
             job.relevancy=j['relevant']
             job.is_relevant_confidence = j['confidence']
             job.industry=j['industry']
@@ -209,7 +209,7 @@ class GPTAnswerer:
             prompt = ChatPromptTemplate.from_template(prompt_sanitize_template)
             chain = prompt | self.llm_cheap | StrOutputParser()
             output = chain.invoke({"position_title": position, "full_company_name": company_name})
-            j = json.loads(output)
+            j = json.loads(output, strict=False)
             c = j["company"]
             p = j["pos"]
         except Exception as e:
