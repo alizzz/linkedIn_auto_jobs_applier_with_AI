@@ -163,14 +163,19 @@ class GPTAnswerer:
         self.job_application_profile = job_application_profile
         
 
-    #there is a side effect - job relevancy fields are updated
+    #there is a side effect - job relevancy fields in the job parameter are updated
     def is_relevant_job(self, job:Job,
-                        relevance_criteria:str='software development, software engineering, machine learning, data science, analytics, or AI' ) -> bool:
+                            relevance_criteria:str='software development, software engineering, machine learning, data science, analytics, or AI' ) -> bool:
         relevant = False
-        job_desc = job.description
         try:
-
-            prompt_is_relevant="""You are an experience HR professional and job desciption analyst. 
+            if job.job_description_summary is not None and len(job.job_description_summary)>0:
+                job_desc=job.job_description_summary
+            else:
+                if job.description is None or len(job.description)==0:
+                    raise Exception('Both job description and job description summary are empty. Unable to continue')
+                job_desc = job.description
+            #ToDo Load prompt from file (or dict)
+            prompt_is_relevant="""You are an experienced HR professional and job desciption analyst. 
             Read the job description and thoroughly analyze it. Answer the question if this job is relevant to {relevance_criteria}. 
             Answer only the relevance and your confidence in the answer using the following valid json of the following format
             'relevant': 'Yes'  or 'No',

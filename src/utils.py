@@ -5,10 +5,80 @@ import re
 from selenium import webdriver
 import json
 from collections import defaultdict
+import csv
+import datetime
+import traceback
 from lib_resume_builder_AIHawk.utils import HTML_to_PDF
 
 chromeProfilePath = os.path.join(os.getcwd(), "chrome_profile", "linkedin_profile")
 
+def get_id_from_linkedin_url(url, pattern = r'linkedin\.com/.+?/(\d+)/'):
+    if url is None or len(url)==0: return None
+    match = re.search(pattern, url)
+    if match:
+        return match.group(1)
+    return None
+
+def save_job_list(jobs, location):
+    if jobs is None or len(jobs)==0:
+        printyellow(f'Warning: in save_job_list(): there is no jobs to save')
+    try:
+        for job in jobs:
+            job.save(location=location)
+    except Exception as ex:
+        printred(f"Exception while saving job list. Error {ex}")
+        print(traceback.format_exc())
+
+def find_job_in_path(id, path):
+    if id is None or len(id) == 0: return False
+    if not os.path.exists(path): return False
+    for root, dirs, _ in os.walk(path):
+        for dir in dirs:
+            if id in dir.split('.'):
+                print(
+                    f'Job Id {id} has been found in a folder {dir}, path: {root}')
+                return True
+    return False
+
+#required for serializing dataclass with datetime fields
+def custom_serializer(obj):
+    if isinstance(obj, datetime.datetime):
+        return obj.isoformat()  # Convert datetime to ISO string
+    raise TypeError(f"Type {type(obj)} not serializable")
+
+def flatten_dict(d, parent_key='', sep='__'):
+    """
+    Flatten a nested dictionary by concatenating keys with a separator.
+    """
+    items = []
+    for key, value in d.items():
+        new_key = f"{parent_key}{sep}{key}" if parent_key else key
+        if isinstance(value, dict):
+            items.extend(flatten_dict(value, new_key, sep=sep).items())
+        else:
+            items.append((new_key, value))
+    return dict(items)
+
+
+def dict_to_csv(data_dict, csv_file_path, delimiter):
+    # Flatten all dictionaries in the list
+    flattened_data = [flatten_dict(item) for item in data_dict]
+
+    # Extract all unique column names (keys) from the flattened dictionaries
+    column_names = set()
+    for item in flattened_data:
+        column_names.update(item.keys())
+
+    # Write to CSV file
+    with open(csv_file_path, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=sorted(column_names), delimiter=delimiter)
+
+        # Write header
+        writer.writeheader()
+
+        # Write data rows
+        for row in flattened_data:
+            writer.writerow(row)
 
 def ensure_chrome_profile():
     profile_dir = os.path.dirname(chromeProfilePath)
@@ -92,10 +162,10 @@ def chromeBrowserOptions():
     return options
 
 #alias make_valid_path(...)
-def make_valid_os_path_string(path_string: str, invalid_chars: str=r'[<>:"/\\|?*,\s+]', repl: str='_'):
+def make_valid_os_path_string(path_string: str, invalid_chars: str=r'[<>:"/\\|?*,&()\s+]', repl: str='_'):
     return make_valid_path(path_string, invalid_chars, repl)
-def make_valid_path(path_string: str, invalid_chars: str=r'[<>:"/\\|?*,\s+]', repl: str='_') -> str:
-    if path_string is None: return ''
+def make_valid_path(primary_path_string: str, secondary_path_string: str = None, max_len = None, invalid_chars: str=r'[<>:"/\\|?*,&()\s+]', repl: str='_') -> str:
+    if primary_path_string is None and secondary_path_string is None: return ''
     """
     Converts a given string into a valid folder name by replacing or removing invalid characters.
     Invalid characters are replaced with underscores, and leading/trailing spaces are trimmed.
@@ -108,15 +178,18 @@ def make_valid_path(path_string: str, invalid_chars: str=r'[<>:"/\\|?*,\s+]', re
     """
     # Define characters not allowed in folder names across major operating systems
     #invalid_chars = r'[<>:"/\\|?*]'
+    str = primary_path_string if primary_path_string is not None and len(primary_path_string)>0 else secondary_path_string
 
     # Replace invalid characters with underscores
-    valid_name = re.sub(invalid_chars, repl=repl, string=path_string)
+    valid_name = re.sub(invalid_chars, repl=repl, string=str)
 
     # Trim leading and trailing spaces
     valid_name = valid_name.strip()
 
     # Optionally: Replace multiple underscores with a single underscore
     valid_name = re.sub(pattern=f'{repl}+', repl=repl, string=valid_name)
+    if max_len is not None:
+        valid_name = valid_name[:max_len]
 
     return valid_name
 

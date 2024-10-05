@@ -1,0 +1,13 @@
+profile_name: AL
+config: config.yaml
+plain: plain_text_resume.yaml
+secretes: secrets.yaml
+base_path: ~
+data_folder: data_folder
+output_dir: output_dir
+jobs_dir: jobs
+resume_template:
+
+environment:
+  RESUME_TEMPLATE: al_resume_template.html
+  SKIP_APPLY: False

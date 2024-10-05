@@ -13,21 +13,57 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 import src.utils as utils
 from src.utils import EnvironmentKeys
 from src.utils import printcolor, printyellow, printred
+from src.utils import find_job_in_path
 from src.job import Job
-from src.utils import make_valid_path, make_valid_os_path_string, EnvironmentKeys
+from src.utils import make_valid_path, make_valid_os_path_string, EnvironmentKeys, save_job_list
 from src.linkedIn_easy_applier import LinkedInEasyApplier
 from lib_resume_builder_AIHawk.config import global_config
-from CustomExceptions import NotRelevantError, NoJobsOnPageError
+from CustomExceptions import NotRelevantError, NoJobsOnPageError, AlreadyRetrievedError, OutOfPolicyError
 from urllib.parse import quote
 
 load_dotenv()
 
-class JobTile:
-    def __init__(self, tile: Any):
+def wait_page_to_load(driver, timeout=10, post_sleep=(1.0, 2.5)):
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda driver: driver.execute_script("return document.readyState") == "complete"
+        )
+        if post_sleep is not None:
+            time.sleep(random.uniform(*post_sleep))
+    except:
+        print("Page load timed out.")
+
+class JobSearchElement:
+    def __init__(self, tile: Any, driver, job:Job=None):
+        self.driver = driver
         self.tile = tile
+        self.job = job if job is not None else Job()
+        self.rc = self.load_job_details_right_container()
+        self.set_job_insigts()
+
+    def load_job_details_right_container(self):
+        rc = None
+        try:
+            a = self.tile.find_element(By.TAG_NAME, 'a')
+            if a is not None:
+                a.click()
+                time.sleep(random.uniform(3.5, 5.1))
+                return self.driver.find_element(By.CLASS_NAME, 'jobs-search__job-details--container')
+        except:
+            pass
+        return None
+
+    def is_easy_apply(self)->bool:
+        try:
+            return 'Easy Apply' in [x.text for x in self.driver.find_elements(By.TAG_NAME, 'button')]
+        except:
+            pass
+        return False
+
     def get_job_title(self):
         res = ""
         try:
@@ -50,12 +86,13 @@ class JobTile:
             pass
         return res
     def get_apply_method(self):
-        res = "unk"
-        try:
-            res= self.tile.find_element(By.CLASS_NAME, 'job-card-container__apply-method').text
-        except:
-            pass
-        return res
+        #res = "unk"
+        return 'Easy Apply' if self.is_easy_apply() else 'Apply'
+        #try:
+        #    res= self.tile.find_element(By.CLASS_NAME, 'job-card-container__apply-method').text
+        #except:
+        #    pass
+        #return res
     def get_link(self):
         res = ""
         try:
@@ -66,7 +103,7 @@ class JobTile:
     def get_id(self):
         id = ""
         try:
-            link = self.tile.find_element(By.CLASS_NAME, 'job-card-list__title').get_attribute('href').split('?')[0]
+            link = self.tile.find_element(By.CLASS_NAME, 'job-card-list__title').get_attribute('href')
             id = Job.get_id_from_link(link)
         except:
             pass
@@ -86,6 +123,31 @@ class JobTile:
         except:
             pass
         return applied
+
+    def get_job_description(self):
+        jd = self.rc.find_element(By.CLASS_NAME, 'jobs-description-content__text').find_element(By.CLASS_NAME, 'mt4')
+        jd_text = jd.text
+        #cleaning?
+        return jd_text
+
+    def set_job_insigts(self):
+        salary:str=None
+        office_policy:str=None
+        experience_level:str=None
+        try:
+            insigts = [x.text for x in self.rc.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__job-insight").find_elements(By.TAG_NAME, 'span')[1:]]
+            for x in insigts:
+                if x is not None:
+                    if '$' in x:
+                        salary = x
+                    elif x.lower() in ['hybrid', 'remote', 'on-site']:
+                        office_policy = x
+                    elif x.lower() in ['internship', 'level', 'associate', 'director', 'executive']:
+                        experience_level = x
+        except Exception as e:
+            printred(f'Error set_job_insights for job id:{e}')
+
+        return salary, office_policy, experience_level
 
 class LinkedInJobManager:
     def __init__(self, driver):
@@ -267,7 +329,7 @@ class LinkedInJobManager:
                     if job_page_number>max_pages_per_location:
                         break
                     utils.printyellow(f"Going to search page {job_page_number} for {position} in {location}")
-                    self.next_job_page(position, location_url, job_page_number)
+                    self.next_job_search_page(position, location_url, job_page_number)
 
                     if self.is_no_more_jobs_found():
                         printcolor(f"No more matching jobs found for {position} in {location}\nFound {jobs_stat_search['found']}. Processed: {jobs_stat_search['completed']}. Skipped: {jobs_stat_search['already_processed']+jobs_stat_search['blacklisted']+jobs_stat_search['not_relevant']}: (Already Processed: {jobs_stat_search['already_processed']}. Blacklisted:{jobs_stat_search['blacklisted']}, Not relevant: {jobs_stat_search['not_relevant']})", 'magenta')
@@ -317,11 +379,11 @@ class LinkedInJobManager:
         random.shuffle(searches)
         return searches
 
-
-    def get_jobs_from_search(self, position, location, max_pages_per_location=15, job_stat_search = None, page_sleep=0):
+    def get_jobs_from_search(self, position, location, max_pages_per_location=15, jobs_stat_search = None, page_sleep=0, no_expected:int=0):
+        jobs=[]
         location_url = self.get_location_url(location=location)
-        if job_stat_search is None:
-            job_stat_search = {
+        if jobs_stat_search is None:
+            jobs_stat_search = {
                 'completed': 0,
                 'found': 0,
                 'already_processed': 0,
@@ -331,24 +393,32 @@ class LinkedInJobManager:
         job_page_number = -1
         utils.printyellow(f"Starting the search for {position} in {location}.")
 
-        os.makedirs(os.path.join(EnvironmentKeys.get_key('OUTPUT_JOBS_DIRECTORY', False), make_valid_path(location)),
-                    exist_ok=True)
-        job_list:[Job]=None
+        #os.makedirs(os.path.join(EnvironmentKeys.get_key('OUTPUT_JOBS_DIRECTORY', False), make_valid_path(location)), exist_ok=True)
+
         while True:
             page_sleep += 1
             job_page_number += 1
             if job_page_number > max_pages_per_location:
                 break
             utils.printyellow(f"Going to search page {job_page_number} for {position} in {location}")
-            self.next_job_page(position, location_url, job_page_number)
-
+            self.next_job_search_page(position, location_url, job_page_number)
             if self.is_no_more_jobs_found():
                 printcolor(
                     f"No more matching jobs found for {position} in {location}\nFound {jobs_stat_search['found']}. Processed: {jobs_stat_search['completed']}. Skipped: {jobs_stat_search['already_processed'] + jobs_stat_search['blacklisted'] + jobs_stat_search['not_relevant']}: (Already Processed: {jobs_stat_search['already_processed']}. Blacklisted:{jobs_stat_search['blacklisted']}, Not relevant: {jobs_stat_search['not_relevant']})",
                     'magenta')
                 break
 
-            job_list = self.build_job_list(job_list)
+            try:
+                if no_expected==0:
+                    no_expected_str = self.driver.find_element(By.CLASS_NAME, 'class="jobs-search-results-list__subtitle').text
+                    if no_expected_str is not None and len(no_expected_str) > 0:
+                        no_expected = int(no_expected_str.split(' ')[0])
+            except:
+                pass
+            jobs_ = self.build_job_list(num_expected=no_expected, search_location=location)
+            #will save inline as goes in build_job_list
+            #save_job_list(jobs_, location)
+            jobs += jobs_
 
             utils.printyellow(
                 f"Loaded search page {job_page_number} position: {position}, location_url: {location_url}")
@@ -356,7 +426,7 @@ class LinkedInJobManager:
             utils.printyellow(
                     f"Starting the application process for the search page {job_page_number} for {position} in {location}...")
 
-            return job_list
+        return jobs
 
 
 
@@ -376,10 +446,7 @@ class LinkedInJobManager:
 
         try:
             self.driver.get(job_url)
-            WebDriverWait(self.driver, 10).until(
-                lambda driver: driver.execute_script("return document.readyState") == "complete"
-            )
-            time.sleep(random.uniform(1.0, 3.0))
+            wait_page_to_load(self.driver, 10, (0.5, 1.5))
         except Exception as e:
             pass
         try:
@@ -442,7 +509,7 @@ class LinkedInJobManager:
                 if '$' in x:
                     job.salary = x
                 elif x.lower() in ['hybrid', 'remote','on-site'] :
-                    job.office_policy = x
+                    job._office_policy = x
                 elif x.lower() in ['internship', 'level', 'associate', 'director', 'executive']:
                     job.experience_level = x
         except Exception as e:
@@ -450,56 +517,83 @@ class LinkedInJobManager:
 
         return job
 
-    def build_job_list(self, job_list: List[Job]=None, search_location: str=None, search_position: str=None):
+    #has a side effect. It save job as it is loaded
+    def build_job_list(self, job_list: List[Job]=None, search_location: str=None, search_position: str=None, num_expected:int=0):
         if job_list is None: job_list = []
         try:
             job_results = self.driver.find_element(By.CLASS_NAME, "jobs-search-results-list")
-            utils.scroll_slow(self.driver, job_results)
-            utils.scroll_slow(self.driver, job_results, step=300, reverse=True)
+            #utils.scroll_slow(self.driver, job_results)
+            #utils.scroll_slow(self.driver, job_results, step=300, reverse=True)
             job_list_elements = self.driver.find_elements(By.CLASS_NAME, 'scaffold-layout__list-container')[
                 0].find_elements(By.CLASS_NAME, 'jobs-search-results__list-item')
             utils.printyellow(f"job_list_elements: {job_list_elements}")
             if not job_list_elements:
                 print("No job class elements found on page")
                 raise Exception("No job class elements found on page")
+            num_expected+=len(job_list_elements)
             print(f"There're {len(job_list_elements)} jobs on page")
             c = 0
             for job_element in job_list_elements:
-                job_tile = JobTile(job_element)
-                job_title = job_tile.get_job_title()
-                company_name = job_tile.get_company()
-                location_raw = job_tile.get_job_location()
-                link = job_tile.get_link()
-                apply_method = job_tile.get_apply_method()
-                id = job_tile.get_id()
+                try:
+                    job_element_a_details = job_element.find_element(By.TAG_NAME, 'a')
+                    id = Job.get_id_from_link(job_element_a_details.get_attribute('href'))
+                    job_is_found = find_job_in_path(id, Job.get_base_path())
+                    if  job_is_found:
+                        pos = job_element_a_details.get_attribute('aria-label')
+                        if pos is not None:
+                            msg = f"ALREADY COMPLETED: Job {pos} id:{id}. Skipping"
+                        else:
+                            msg = f"ALREADY COMPLETED: Job id:{id}. Skipping"
+                        raise AlreadyRetrievedError(msg)
 
-                if job_tile.is_applied():
-                    print(f"ALREADY APPLIED: Job {job_title} at {company_name} in {location_raw} id:{id}. Skipping")
-                    continue
+                    self.driver.execute_script("arguments[0].scrollIntoView();", job_element_a_details)
+                    job_element_a_details.click()
+                    job_tile = JobSearchElement(job_element, self.driver)
+                    id = job_tile.get_id()
+                    job_title = job_tile.get_job_title()
+                    company_name = job_tile.get_company()
+                    location_raw = job_tile.get_job_location()
+                    link = job_tile.get_link()
+                    apply_method = job_tile.get_apply_method()
+                    jd = job_tile.get_job_description()
 
-                job = Job(title=job_title,
-                          company=company_name,
-                          location_raw=location_raw,
-                          link=link,
-                          apply_method=apply_method,
-                          id=id,
-                          _search_location=search_location,
-                          _search_position=search_position
-                          )
+                    salary, office_policy, experience_level = job_tile.set_job_insigts()
+                    easy_apply = job_tile.is_easy_apply()
 
-                #check if that job id has already been processed:
-                if self.is_completed(job):
-                    printyellow(f"ALREADY APPLIED: Job {job_title} at {company_name} in {location_raw} id:{id}. Skipping")
-                    continue
+                    job = Job(title=job_title,
+                              company=company_name,
+                              location_raw=location_raw,
+                              link=link,
+                              apply_method=apply_method,
+                              id=id,
+                              description=jd,
+                              compensation=salary,
+                              _office_policy=office_policy,
+                              experience_level=experience_level,
+                              _search_location=search_location,
+                              _search_position=search_position
+                              )
 
-                if EnvironmentKeys.get_key('REMOTE_ONLY') and job.office_policy.lower()!='remote':
-                    printyellow(f'REMOTE_ONLY is set to True and job.office_policy is {job.office_policy} for Job {job_title} at {company_name} in {location_raw} id:{id}. Skipping')
+                    if EnvironmentKeys.get_key('REMOTE_ONLY') and job._office_policy.lower()!= 'remote':
+                        raise OutOfPolicyError(f'REMOTE_ONLY is set to True and job.office_policy is {job._office_policy} for Job {job_title} at {company_name} in {location_raw} id:{id}. Skipping')
 
-                job_list.append(job)
+                    #GPT
+                    job.set_job_description_summary(self.gpt_answerer.summarize_job_description(jd))
+                    self.gpt_answerer.is_relevant_job(job)
+
+
+                    job_list.append(job)
+                    job.save(location=search_location)
+                    print(f"Added job {c+1} to the list. Company:{job.company}, Title:{job.title}, id:{job.id}")
+                except AlreadyRetrievedError as e:
+                    printyellow(e)
+                except OutOfPolicyError as e:
+                    printyellow(e)
+                except Exception as e:
+                    printred(f'Exception while processing job {c+1}. Error {e}')
+                    print(traceback.format_exc())
                 c += 1
-                print(f"Added job {c} to the list. Company:{job.company}, Title:{job.title}, id:{job.id}")
-
-            utils.printyellow(f"len(job_list): {len(job_list)}")
+                utils.printyellow(f"completed {c} out of {len(job_list_elements)} jobs on the page")
         except Exception as e:
             print(f'Exception while adding jobs from page. len(job_list):{len(job_list)} Error: {e}')
         return job_list
@@ -683,10 +777,15 @@ class LinkedInJobManager:
         base_url = "&".join(url_parts)
         return f"?{base_url}{date_param}"
     
-    def next_job_page(self, position, location, job_page):
+    def next_job_search_page(self, position, location, job_page, timeout = random.uniform(8,12)):
+        #go by search page number
         search_url = f"https://www.linkedin.com/jobs/search/{self.base_search_url}&keywords={position}{location}&start={job_page * 25}"
         print(f'In Linkedin_job_manager::next_job_page({position},{location},{job_page}). Search URL={search_url} ')
         self.driver.get(search_url)
+        wait_page_to_load(self.driver, timeout, None)
+
+
+
 
 
     @staticmethod
@@ -757,14 +856,7 @@ class LinkedInJobManager:
 
         return res
 
-    def is_completed(self, job):
-        res = False
-        link_seen = job.link in self.seen_jobs
-        if job.id is None or len(job.id)==0: return False
-        for root, dirs, _ in os.walk(job.base_path):
-            for dir in dirs:
-                if job.id in dir.split('.'):
-                    print(f'in LinkedInJobManager::is_completed() Job Id {job.id} has been found in a folder {dir}, path: {root}. DEBUG={self.is_debug}')
-                    return True
 
-        return False
+    def is_completed(self, job):
+        link_seen = job.link in self.seen_jobs
+        return utils.find_job_in_path(id=job.id, path=job.base_path)

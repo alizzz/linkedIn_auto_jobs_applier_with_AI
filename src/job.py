@@ -2,12 +2,13 @@ import datetime
 import json
 import os.path
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict, astuple
 import pathlib
 from src.utils import printcolor,printred,printyellow
 from src.utils import EnvironmentKeys
-from src.utils import make_valid_os_path_string, make_valid_path, get_state_from_loc
-
+from src.utils import make_valid_os_path_string, make_valid_path, get_state_from_loc, get_id_from_linkedin_url
+from src.utils import custom_serializer
+import traceback
 @dataclass
 class DocSet:
     docset_name: str
@@ -86,7 +87,7 @@ class Job:
     apply_method: str = 'unk'
     description: str = ""
     compensation: str=""
-    office_policy: str = "unk"
+    _office_policy: str = "unk"
     job_description_summary: str = ""
     link: str = ''
     skills = []
@@ -107,6 +108,8 @@ class Job:
     _search_location: str=None
     _search_position: str=None
     _salary: str=None
+    _blacklisted:bool=None
+
     #base_path: str = ''
     #pdf_file: str = ""
     #html_file: str = ""
@@ -115,13 +118,75 @@ class Job:
     job_docset: DocSet = None
     cover: DocSet = None
 
+
+    def serialize(self)->str:
+        return json.dumps(asdict(self), default=custom_serializer)
+    
+    def save(self, location=None, position=None, base_path=None):
+        try:
+            if location is None:
+                location = self.loc_path
+            if position is None:
+                position=make_valid_path(self.abbreviated_position, self.title, max_len=35)
+            if base_path is None:
+                base_path=self.base_path
+
+            loc = make_valid_path(location, max_len=20)
+            path_relevant_remote = os.path.join(base_path, 'Relevant', '_Remote')
+            path_relevant_loc = os.path.join(base_path, 'Relevant', loc)
+            path_x_relevant_loc = os.path.join(base_path, 'X_relevant', loc)
+            path_x_relevant_remote = os.path.join(base_path, 'X_relevant', '_Remote')
+
+            fn_co = f'{make_valid_path(self.truncated_co_name, self.company, max_len=20)}'
+            fn_op = f'{self.office_policy}' if self.office_policy.lower() in ['remote','hybrid','on-site'] else 'unk'
+            fn_easy = 'easy' if self.is_easyApply else 'site'
+            fn_relevant = 'rlv' if self.is_relevant else 'x_rlv'
+            fn = f'{self.date_time_string}.{fn_co}.{position}.{fn_op}.{fn_relevant}.{fn_easy}.{self.id}'
+
+            if self.is_relevant:
+                if self.office_policy.lower() == 'remote':
+                    path = path_relevant_remote
+                else:
+                    path = path_relevant_loc
+            else:
+                if self.office_policy.lower() == 'remote':
+                    path = path_x_relevant_remote
+                else:
+                    path = path_x_relevant_loc
+
+            os.makedirs(os.path.join(path, fn), exist_ok=True)
+            try:
+                with open(os.path.join(path, fn, 'desc.txt'), 'w', encoding='utf-8') as f:
+                    f.write(self.description)
+            except Exception as e:
+                printred(f'ERROR while saving job description for job id {self.id}. Error: {e}')
+            try:
+                with open(os.path.join(path, fn, 'desc_summary.txt'), 'w', encoding='utf-8') as f:
+                    f.write(self.job_description_summary)
+            except Exception as e:
+                printred(f'ERROR while saving job description summary for job id {self.id}. Error: {self.id}')
+            try:
+                with open(os.path.join(path, fn, 'job.json'), 'w', encoding='utf-8') as f:
+                    s = self.serialize()
+                    f.write(s)
+            except Exception as e:
+                printred(f'ERROR while serializing job id {self.id}. Error: {self.id}')
+            try:
+                with open(os.path.join(path, fn, f'job_{self.id}.url'), 'w') as f:
+                    f.write(f"[InternetShortcut]\nURL={self.link}\n")
+            except Exception as e:
+                printred(f"Exception while saving shortcut for id {self.id}. Error {e}")
+        except Exception as e:
+            printred(f'ERROR while saving job id {self.id}. Error: {self.id}')
+            print(traceback.format_exc())
+
     @property
     def search_location(self):
         return make_valid_os_path_string(self._search_location)
 
     @property
     def search_position(self):
-        return make_valid_os_path_string
+        return make_valid_os_path_string(self.title)
     def __post_init__(self):
         if id == "": self.set_id_from_link(self.link)
         self.set_office_policy(Job.get_office_policy_from_raw_location(self.location_raw))
@@ -140,7 +205,7 @@ class Job:
             "job_title": self.title,
             "company_name": self.company,
             "job_location": self.location,
-            "office_policy": self.office_policy,
+            "office_policy": self._office_policy,
             "job_compensation": self.compensation,
             "is_relevant":self.is_relevant_str,
             "relevant_confidence":self.is_relevant_confidence,
@@ -148,6 +213,7 @@ class Job:
             "easy_apply": self.is_easyApply,
             "link": self.link,
             "job_recruiter": self.recruiter_link,
+            "blacklisted": self._blacklisted if self._blacklisted is not None else 'unk',
             "job_desc_file": os.path.split(self.job_docset.txt)[1],
             "resume_pdf": os.path.split(self.resume.pdf)[1],
             "resume_html": os.path.split(self.resume.html)[1]
@@ -160,9 +226,7 @@ class Job:
 
     @staticmethod
     def get_id_from_link(lnk):
-        if lnk is not None and len(lnk)>0:
-            return lnk.split('/')[-2].strip()
-
+        return get_id_from_linkedin_url(lnk)
     @staticmethod
     def get_office_policy_from_raw_location(location: str = ""):
         office_policy = 'unk'
@@ -186,6 +250,7 @@ class Job:
         loc = loc.strip()
         return loc
 
+
     @property
     def json(self):
         data = {
@@ -194,8 +259,9 @@ class Job:
             "job_title": self.title,
             "company_name": self.company,
             "job_location": self.location,
-            "office_policy": self.office_policy,
+            "office_policy": self._office_policy,
             "job_compensation": self.compensation,
+            "easy_apply": self.is_easyApply,
             "applied": self.is_applied,
             "link": self.link,
             "job_recruiter": self.recruiter_link,
@@ -205,6 +271,7 @@ class Job:
             "relevancy": self.is_relevant_str,
             "is_relevant": self.is_relevant,
             "is_relevant_confidence": self.is_relevant_confidence,
+            "blacklisted": f'{self._blacklisted}' if self._blacklisted is not None else 'unk',
             "job_desc": self.description,
             "job_desc_summary": self.job_description_summary,
             "industry": self.industry,
@@ -217,22 +284,76 @@ class Job:
     #@property
     #def base_path(self):
 
+
+    @property
+    def is_blacklisted(self)->bool:
+        return self._blacklisted
     @property
     def is_relevant_str(self):
         if self.relevancy is None or self.relevancy=='unk': return 'relev_unk'
         return 'relevant' if self.is_relevant else 'not_relevant'
     @property
     def is_relevant(self) ->bool:
-        if self.relevancy is None:
-            return False
-        return self.relevancy.lower() in ['y','yes', '1', 'on', 't','true']
+        rel = False
+        if self.relevancy is not None:
+            rel = self.relevancy.lower() in ['y','yes', '1', 'on', 't','true']
+        return rel
     @is_relevant.setter
     def is_relevant(self, value):
         self.relevancy = value
     @property
     def abbreviated_position(self):
         if (self._abbreviated_position is None or len(self._abbreviated_position)==0):
-            return make_valid_path(self.title) if self.title is not None else 'Pos_'
+            txt = 'UnkPosition'
+            if self.title:
+                txt=self.title
+                pattern_replacement_list = [
+                    ('Senior','Sr'),
+                    ('Director', 'Dir'),
+                    ('Manager', 'Mgr'),
+                    ('Product', 'Prod'),
+                    ('Vice President', 'VP'),
+                    ('Software', 'SW'),
+                    ('Engineering', 'Eng'),
+                    ('Machine Learning','ML'),
+                    ('Data Science', 'DS'),
+                    ('Development', 'Dev'),
+                    ('Business','Bus'),
+                    ('Corporate', 'Corp'),
+                    ('Project', 'Proj'),
+                    ('President', 'Pres'),
+                    ('Operations', 'Oper'),
+                    ('Architect','Arch'),
+                    ('Technical', 'Tech'),
+                    ('Recruitment', 'Recr'),
+                    ('Solution', 'Sol'),
+                    ('Solutions', 'Sols'),
+                    ('Program', 'Prgm'),
+                    ('Platform', 'Pfrm'),
+                    ('Scientist', 'Scntst'),
+                    ('Customer', 'Cust'),
+                    ('Temporary', 'Temp'),
+                    ('Technology', 'Tech'),
+                    ('Technologies', 'Techs'),
+                    ('Principal','Princ'),
+                    ('Generative', 'Gen'),
+                    ('Community', 'Comnty'),
+                    ('Finance', 'Fin'),
+                    ('Corporate', 'Corp'),
+                    ('Economics', 'Econ'),
+                    ('Marketing', 'Mktg'),
+                    ('Fullfilment', 'Ffmnt'),
+                    ('Research', 'Rsch'),
+                    ('Qualitative', 'Qual'),
+                    ('Quality Assurance', 'QA'),
+                    ('Performance', 'Perf'),
+                    ('Business Intelligence', 'BI'),
+                    ('Manufacturing', 'Manuf'),
+                    ('Information','Inf')
+                ]
+                for p, r in pattern_replacement_list:
+                    txt = re.sub(p, r, txt, flags=re.IGNORECASE)
+            return make_valid_path(txt)
         else:
             return self._abbreviated_position
 
@@ -292,7 +413,7 @@ class Job:
 
     def get_fname(self):
         self.set_date_time()  # setting it only if it has not been set before
-        office_policy = f'.{self.office_policy}' if self.office_policy.lower() in ['remote', 'hybrid'] else ''
+        office_policy = f'.{self._office_policy}' if self._office_policy.lower() in ['remote', 'hybrid'] else ''
         co_name = f'.{self.truncated_co_name}' if self.truncated_co_name is not None else '.Co_'
         pos = f'.{self.abbreviated_position}'
         fname = f'{self.date_time_string}{co_name}{pos}{office_policy}.{self.id}'
@@ -313,21 +434,23 @@ class Job:
     def base_loc_path(self):
         return self.get_base_loc_path()
 
-    def get_base_loc_path(self):
-        loc = None
+    @property
+    def loc_path(self)->str:
+        loc = ''
         if self.search_location is not None and len(self.search_location)>0:
             loc = self.search_location
         elif self.location is not None and len(self.location)>0:
             loc_split = self.location.split(',')
             if len(loc_split)>1:
                 loc = loc_split[1].strip()
-
-        if loc is None:
+        return make_valid_path(loc) if loc is not None else ''
+    def get_base_loc_path(self):
+        loc = self.loc_path
+        if loc is None or len(loc)==0:
             base_loc_path = Job.get_base_path()
         else:
-            base_loc_path = os.path.join(Job.get_base_path(), make_valid_os_path_string(self.search_location))
+            base_loc_path = os.path.join(Job.get_base_path(), loc)
 
-        os.makedirs(base_loc_path, exist_ok=True)
         return base_loc_path
     @property
     def applied_file(self):
@@ -335,6 +458,10 @@ class Job:
     @property
     def is_applied(self)->bool:
         return os.path.exists(self.applied_file)
+
+    def get_csv(self, delim=',', header = False):
+        data = self.json
+
 
     #ToDo: check and move from 'ready' to 'applied'
     def set_applied(self):
@@ -345,18 +472,26 @@ class Job:
         self.applied = True
     def set_office_policy_from_raw_location(self, raw_location, overwrite = False):
         self.set_office_policy(policy=Job.get_office_policy_from_raw_location(raw_location), overwrite=overwrite)
-        return self.office_policy
+        return self._office_policy
 
     def set_office_policy(self, policy="unk", overwrite=False):
-        if policy == self.office_policy: return
-        if overwrite or self.office_policy == "" or self.office_policy == 'unk':
+        if policy == self._office_policy: return
+        if overwrite or self._office_policy is None or self._office_policy == "" or self._office_policy == 'unk':
             if policy.lower() in ['unk', 'on-site', 'hybrid', 'remote']:
-                self.office_policy = policy
+                self._office_policy = policy
             else:
-                print(f'WARNING: Attempt setting office_policy to undefined value {policy} for job {self.id}. Current office policy is {self.office_policy}. Aborting')
+                print(f'WARNING: Attempt setting office_policy to undefined value {policy} for job {self.id}. Current office policy is {self._office_policy}. Aborting')
         else:
-            print(f'WARNING: Attempt overwriting current office_policy value: `{self.office_policy}` with value: `{policy}` for job {self.id}. Overwrite flag is {overwrite}. Aborting')
+            print(f'WARNING: Attempt overwriting current office_policy value: `{self._office_policy}` with value: `{policy}` for job {self.id}. Overwrite flag is {overwrite}. Aborting')
 
+    @property
+    def office_policy(self):
+        if self._office_policy is None: return 'unk'
+        return self._office_policy
+
+    @office_policy.setter
+    def office_policy(self, value):
+        self.set_office_policy(value)
 
     def set_id_from_link(self, job_link):
         self.id = Job.get_id_from_link(job_link)

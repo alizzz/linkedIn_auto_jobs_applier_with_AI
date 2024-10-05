@@ -121,9 +121,9 @@ class LinkedInEasyApplier:
                         print(f"Failed saving '.applied' file for {job.base_loc_path}")
                 else:
                     print(
-                        f'Job {job.id} for {job.title} at {job.company} in {job.location}({job.office_policy}) is Easy Apply but EASY_APPLY key is False. Please review manually')
+                        f'Job {job.id} for {job.title} at {job.company} in {job.location}({job._office_policy}) is Easy Apply but EASY_APPLY key is False. Please review manually')
             else:
-                print(f'Job {job.id} for {job.title} at {job.company} in {job.location}({job.office_policy}) is not an Easy Apply. Please review manually')
+                print(f'Job {job.id} for {job.title} at {job.company} in {job.location}({job._office_policy}) is not an Easy Apply. Please review manually')
                 #job.applied="No"
 
             res = True

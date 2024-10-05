@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 import re
 import sys
@@ -14,9 +15,10 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import WebDriverException, TimeoutException
 from selenium.webdriver.common.by import By
+from src.job import Job
 from src.utils import chromeBrowserOptions
 from src.utils import printcolor, printyellow, printred
-from src.utils import EnvironmentKeys
+from src.utils import EnvironmentKeys, make_valid_path
 from src.gpt import GPTAnswerer
 from src.linkedIn_authenticator import LinkedInAuthenticator
 from src.linkedIn_bot_facade import LinkedInBotFacade
@@ -347,6 +349,61 @@ def exit_(code:int=0, start_time:datetime.datetime=None, color:str='Blue'):
     printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. {exec_time}',color)
     exit(code)
 
+def save_job_list(jobs, location):
+    try:
+        base_path = jobs[0].base_path
+        loc = make_valid_path(location)
+        path_relevant_remote = os.path.join(base_path, 'relevant', '_remote')
+        os.makedirs(path_relevant_remote, exist_ok=True)
+        path_relevant_loc = os.path.join(base_path, 'relevant', loc)
+        os.makedirs(path_relevant_loc, exist_ok=True)
+        path_x_relevant_loc = os.path.join(base_path, 'x_relevant', loc)
+        os.makedirs(path_x_relevant_loc, exist_ok=True)
+        path_x_relevant_remote = os.path.join(base_path, 'x_relevant', '_remote')
+        os.makedirs(path_x_relevant_remote, exist_ok=True)
+        for job in jobs:
+            try:
+                # saving job_desc.txt
+                #       job_desc_summary.txt
+                #       job.json
+                easy = '.easy' if job.is_easyApply else ''
+                fn_co = f'{make_valid_path(job.company) if job._truncated_company_name is None or len(job._truncated_company_name) == 0 else job._truncated_company_name}'
+                fn_title =f'.{make_valid_path(job.title) if job.abbreviated_position is None or len(job.abbreviated_position) == 0 else job.abbreviated_position}'
+                fn_op = f'.{job.office_policy}'
+                fn_easy = 'easy_apply' if job.is_easyApply else 'site_apply'
+                fn_relevant = 'rlvnt' if job.is_relevant else 'not_rlvnt'
+                fn = f'{job.date_time_string}.{fn_co}.{fn_title}.{fn_op}.{fn_relevant}.{fn_easy}.{job.id}'
+
+                if job.is_relevant:
+                    if job.office_policy.lower() == 'remote':
+                        path = path_relevant_remote
+                    else:
+                        path = path_relevant_loc
+                else:
+                    if job.office_policy.lower() == 'remote':
+                        path = path_x_relevant_remote
+                    else:
+                        path = path_x_relevant_loc
+
+                os.makedirs(os.path.join(path, fn), exist_ok=True)
+                with open(os.path.join(path, fn,'job_desc.txt'), 'w', encoding='utf-8') as f:
+                    f.write(job.description)
+                with open(os.path.join(path, fn, 'job_desc_summary.txt'), 'w', encoding='utf-8') as f:
+                    f.write(job.job_description_summary)
+                with open(os.path.join(path, fn, 'job.json'), 'w', encoding='utf-8') as f:
+                    s = job.serialize()
+                    f.write(s)
+                with open(os.path.join(path, fn, f'linkedin_job_{job.id}.url'), 'w', encoding='utf-8') as f:
+                    f.write(f"[InternetShortcut]\nURL={job.link}\n")
+            except Exception as e:
+                printred(f"Exception while saving job id {job.id}. Error {e}")
+                print(traceback.format_exc())
+
+    except Exception as ex:
+        printred(f"Exception while saving job list. Error {ex}")
+        print(traceback.format_exc())
+
+
 @click.command()
 #@click.option('--resume', type=click.Path(exists=False, file_okay=True, dir_okay=False, path_type=Path), help="Path to the resume PDF file")
 @click.option('--resume', type=str, default=None, help="Path to the resume PDF file")
@@ -457,11 +514,27 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
                          browser=browser)
         bot.do_login()
 
-        n=0
+        searches = bot.apply_component.get_searches()
+        print(f'starting {len(searches)} searches')
+        no_expected = 0
+        job_list= []
+        for position, location in searches:
+            nn = 0
+            jobs = bot.apply_component.get_jobs_from_search(position=position, location=location, no_expected=nn)
+            if jobs is not None and len(jobs)>0:
+                job_list+=jobs
+                no_expected+=nn
+                save_job_list(jobs, location)
+                print(f'Expected: {nn} jobs. Retrieved {len(jobs)} jobs from {location} for {position}')
+
+        print(f'Expected: {no_expected} jobs. Retrieved {len(job_list)} jobs from {len(searches)} searches')
+
 
         #bot.generate_job_list_from_search(search_param)
 
         exit_(exit_code, start_time)
+
+
 
     #scan and apply
     try:
@@ -500,5 +573,7 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
 
     end_time = datetime.datetime.now()
     printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time-start_time}', "Blue")
+
+
 if __name__ == "__main__":
     main()

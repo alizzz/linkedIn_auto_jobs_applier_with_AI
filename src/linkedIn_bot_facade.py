@@ -69,7 +69,7 @@ class LinkedInBotFacade:
         _jobs_folder = self.parameters['jobs']
         user_dir = 'name_s'
         try:
-            user_dir = f'{self.resume.personal_information.name}_{self.resume.personal_information.surname[0]}'
+            user_dir = f'{self.resume.personal_information.name[0]}_{self.resume.personal_information.surname[0]}'
         except:
             pass
         return Path(self.parameters['outputFileDirectory'], _jobs_folder if _jobs_folder is not None else 'Jobs',
