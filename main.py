@@ -19,7 +19,7 @@ from selenium.webdriver.common.by import By
 from src.job import Job
 from src.utils import chromeBrowserOptions
 from src.utils import printcolor, printyellow, printred
-from src.utils import EnvironmentKeys, make_valid_path, is_valid_non_empty_string, custom_job_deserializer
+from src.utils import EnvironmentKeys, make_valid_path, is_valid_non_empty_string, custom_job_deserializer, is_valid_linkedin_id, find_jobs_in_path
 from src.utils import dataclass_to_list, dataclass_to_field_names
 from src.gpt import GPTAnswerer
 from src.linkedIn_authenticator import LinkedInAuthenticator
@@ -210,8 +210,7 @@ def validate_url(url):
     return False
 
 def validate_linkedin_id(linkedin_job_id):
-    # Check if the job ID is a numeric string of reasonable length (1 to 12 digits)
-    return bool(re.fullmatch(r'\d{1,12}', linkedin_job_id))
+    return is_valid_linkedin_id(linkedin_job_id)
 
 def validate_linkedin_url(url: str):
     if url is None or len(url)==0: return False
@@ -514,16 +513,36 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
                 "Blue")
             exit_(201, start_time)
 
-        url=lkdn_url(lkdn)
-        browser = None
-        #try:
+        ids = []
+        if os.path.exists(lkdn) and os.path.isfile(lkdn):
+            processed_ids = find_jobs_in_path(output_folder)
+            with open(lkdn, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if validate_linkedin_id(line):
+                        if line not in processed_ids:
+                            ids.append(line)
+                        else:
+                            printyellow(f'{line} has been already processed')
+        else:
+            ids = [lkdn]
+
+        print(f'{ids} jobs are ready to process')
         with init_browser() as browser:
-            bot = create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password, browser=browser)
+            bot = create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
+                             browser=browser)
             bot.do_login()
-            bot.generate_resume_from_url(url)
-        #finally:
-        #    browser.close()
-        #    browser.quit()
+
+            for id in ids:
+                url=lkdn_url(id)
+                browser = None
+                try:
+                    bot.generate_resume_from_url(url)
+                except Exception as e:
+                    printred(f"Failed to create a resume from id: {line}")
+            #finally:
+            #    browser.close()
+            #    browser.quit()
 
         exit_(0, start_time)
 

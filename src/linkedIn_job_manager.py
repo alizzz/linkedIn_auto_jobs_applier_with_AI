@@ -17,7 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import src.utils as utils
 from src.utils import EnvironmentKeys
 from src.utils import printcolor, printyellow, printred
-from src.utils import find_job_in_path
+from src.utils import is_job_in_path
 from src.job import Job
 from src.utils import make_valid_path, make_valid_os_path_string, EnvironmentKeys, save_job_list
 from src.linkedIn_easy_applier import LinkedInEasyApplier
@@ -579,7 +579,7 @@ class LinkedInJobManager:
                     #job_element_a_details = job_element.find_element(By.TAG_NAME, 'a')
                     if job_element_a_details is None: raise NoSuchElementException(f'Unable to locate element by tag "a" from {job_element}')
                     id = Job.get_id_from_link(job_element_a_details.get_attribute('href'))
-                    job_is_found = find_job_in_path(id, Job.get_base_path())
+                    job_is_found = is_job_in_path(id, Job.get_base_path())
                     if  job_is_found:
                         pos = job_element_a_details.get_attribute('aria-label')
                         if pos is not None:
@@ -899,4 +899,4 @@ class LinkedInJobManager:
 
     def is_completed(self, job):
         link_seen = job.link in self.seen_jobs
-        return utils.find_job_in_path(id=job.id, path=job.base_path)
+        return utils.is_job_in_path(id=job.id, path=job.base_path)
