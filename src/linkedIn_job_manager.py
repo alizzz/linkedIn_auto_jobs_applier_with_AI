@@ -828,10 +828,6 @@ class LinkedInJobManager:
         self.driver.get(search_url)
         wait_page_to_load(self.driver, timeout, None)
 
-
-
-
-
     @staticmethod
     def get_job_title_from_tile(self, job_tile):
         job_title = ""
