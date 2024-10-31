@@ -8,12 +8,14 @@ from collections import defaultdict
 import csv
 import datetime
 import traceback
+from typing import Type, TypeVar
+from dataclasses import dataclass, asdict, is_dataclass
 from lib_resume_builder_AIHawk.utils import HTML_to_PDF
 
 chromeProfilePath = os.path.join(os.getcwd(), "chrome_profile", "linkedin_profile")
 
 def get_id_from_linkedin_url(url, pattern = r'linkedin\.com/.+?/(\d+)/'):
-    if url is None or len(url)==0: return None
+    if not is_valid_non_empty_string(url): return None
     match = re.search(pattern, url)
     if match:
         return match.group(1)
@@ -30,7 +32,7 @@ def save_job_list(jobs, location):
         print(traceback.format_exc())
 
 def find_job_in_path(id, path):
-    if id is None or len(id) == 0: return False
+    if not is_valid_non_empty_string(id): return False
     if not os.path.exists(path): return False
     for root, dirs, _ in os.walk(path):
         for dir in dirs:
@@ -41,10 +43,76 @@ def find_job_in_path(id, path):
     return False
 
 #required for serializing dataclass with datetime fields
-def custom_serializer(obj):
+def custom_job_serializer(obj):
     if isinstance(obj, datetime.datetime):
         return obj.isoformat()  # Convert datetime to ISO string
     raise TypeError(f"Type {type(obj)} not serializable")
+
+def custom_job_deserializer(obj):
+    # Look for the _date_time field and convert the string into a datetime object
+    if '_date_time' in obj:
+        # Convert the ISO format string back to a datetime object
+        obj['_date_time'] = datetime.datetime.fromisoformat(obj['_date_time'])
+    return obj
+
+T = TypeVar('T')
+def deserialize(dataclass_type: Type[T], json_data: str, custom_deserializer=custom_job_deserializer) -> T:
+    # Load the JSON data into a dictionary, using custom_deserializer to handle special cases
+    data_dict = json.loads(json_data, object_hook=custom_deserializer)
+
+    # Create the dataclass instance by unpacking the dictionary into the dataclass
+    return dataclass_type(**data_dict)
+
+
+def dataclass_to_field_names(dataclass_instance, parent_prefix="", parent_delim = '.'):
+    result = []
+    dct = asdict(dataclass_instance) if is_dataclass(dataclass_instance) else dataclass_instance
+    for field_name, field_value in dct.items():
+        # Create the full field name path for nested fields
+        full_field_name = f"{parent_prefix}{field_name}" if parent_prefix else field_name
+
+        if is_dataclass(field_value) or isinstance(field_value, dict):
+            # Recursively handle nested dataclasses
+            result.extend(dataclass_to_field_names(field_value, f"{full_field_name}{parent_delim}"))
+        elif isinstance(field_value, list):
+            # Handle lists if they contain dataclasses
+            for idx, item in enumerate(field_value):
+                if is_dataclass(item) or isinstance(field_value, dict):
+                    result.extend(dataclass_to_field_names(item, f"{full_field_name}[{idx}]."))
+                else:
+                    result.append(f"{full_field_name}[{idx}]")
+        else:
+            result.append(full_field_name)
+    return result
+
+
+
+def dataclass_to_list(dataclass_instance):
+    result = []
+    dct = asdict(dataclass_instance) if is_dataclass(dataclass_instance) else dataclass_instance
+    for field_value in dct.values():
+        if is_dataclass(field_value) or isinstance(field_value, dict):
+            # Recursively convert nested dataclasses
+            result.extend(dataclass_to_list(field_value))
+        elif isinstance(field_value, list):
+            # Handle lists if they contain dataclasses
+            for item in field_value:
+                if is_dataclass(item) or isinstance(field_value, dict):
+                    result.extend(dataclass_to_list(item))
+                else:
+                    result.append(item)
+        else:
+            if isinstance(field_value, datetime.datetime):
+                result.append(field_value.strftime('%Y-%d-%mT%H:%M:%S'))
+            else:
+                result.append(field_value)
+    return result
+
+def is_valid_non_empty_string(val: object) -> bool:
+    if val is None: return False
+    if type(val).__name__ != 'str': return False
+    if val.strip()=='': return False
+    return True
 
 def flatten_dict(d, parent_key='', sep='__'):
     """
@@ -59,6 +127,20 @@ def flatten_dict(d, parent_key='', sep='__'):
             items.append((new_key, value))
     return dict(items)
 
+def read_file_content(fpath, flag:str='r', encoding:str='utf-8'):
+    out_str = None
+    try:
+        if fpath is None:
+            raise ValueError(f"Error in read_file_content - fpath is None")
+        if not os.path.exists(fpath):
+            raise FileNotFoundError(f"FileNotFound in read_file_content: {fpath} is not a valid path ")
+
+        with open(fpath, flag, encoding) as f:
+            out_str = f.read()
+    except Exception as e:
+        print(f'Exception while reading file {fpath}. Error {e}. Traceback: {traceback.format_exc()}')
+
+    return out_str
 
 def dict_to_csv(data_dict, csv_file_path, delimiter):
     # Flatten all dictionaries in the list
@@ -163,7 +245,7 @@ def chromeBrowserOptions():
 
 #alias make_valid_path(...)
 def make_valid_os_path_string(path_string: str, invalid_chars: str=r'[<>:"/\\|?*,&()\s+]', repl: str='_'):
-    return make_valid_path(path_string, invalid_chars, repl)
+    return make_valid_path(path_string, invalid_chars=invalid_chars, repl=repl)
 def make_valid_path(primary_path_string: str, secondary_path_string: str = None, max_len = None, invalid_chars: str=r'[<>:"/\\|?*,&()\s+]', repl: str='_') -> str:
     if primary_path_string is None and secondary_path_string is None: return ''
     """
@@ -189,7 +271,8 @@ def make_valid_path(primary_path_string: str, secondary_path_string: str = None,
     # Optionally: Replace multiple underscores with a single underscore
     valid_name = re.sub(pattern=f'{repl}+', repl=repl, string=valid_name)
     if max_len is not None:
-        valid_name = valid_name[:max_len]
+        if len(valid_name)>max_len:
+            valid_name = valid_name[:max_len]
 
     return valid_name
 
@@ -218,6 +301,7 @@ def printcolor(text, color="none", intensity="none"):
     print(f"{COLOR}{text}{RESET}")
 
 def get_state_from_loc(loc, pattern = r",?\s([A-Z]{2})$|,\s([A-Za-z\s]+)$", valid_path = True):
+    if loc is None: return 'None'
     try:
         match = re.search(pattern, loc)
         if match:

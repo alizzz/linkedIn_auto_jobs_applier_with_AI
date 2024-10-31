@@ -2,12 +2,13 @@ import datetime
 import json
 import os.path
 import re
+from typing import Type, TypeVar
 from dataclasses import dataclass, asdict, astuple
 import pathlib
 from src.utils import printcolor,printred,printyellow
 from src.utils import EnvironmentKeys
-from src.utils import make_valid_os_path_string, make_valid_path, get_state_from_loc, get_id_from_linkedin_url
-from src.utils import custom_serializer
+from src.utils import is_valid_non_empty_string, make_valid_os_path_string, make_valid_path, get_state_from_loc, get_id_from_linkedin_url
+from src.utils import custom_job_serializer, deserialize
 import traceback
 @dataclass
 class DocSet:
@@ -81,6 +82,7 @@ class DocSet:
 @dataclass
 class Job:
     id: str = ""
+    _date_time: datetime.datetime = None
     title: str =''
     company: str=''
     location_raw: str=''
@@ -104,11 +106,13 @@ class Job:
     _applied: str = 'unk'
     _abbreviated_position: str= None
     _truncated_company_name: str= None
-    _date_time: datetime.datetime = None
     _search_location: str=None
     _search_position: str=None
     _salary: str=None
     _blacklisted:bool=None
+    _created:datetime.datetime=None
+    _description_added:datetime.datetime=None
+    _resume_added:datetime.datetime=None
 
     #base_path: str = ''
     #pdf_file: str = ""
@@ -120,8 +124,18 @@ class Job:
 
 
     def serialize(self)->str:
-        return json.dumps(asdict(self), default=custom_serializer)
-    
+        return json.dumps(asdict(self), default=custom_job_serializer)
+
+    #example use: job=Job.deserialize(Job, json_str, job_custom_deserializer)
+
+    def deserialize(self, data: str):
+        if is_valid_non_empty_string(data):
+        # Load the JSON data into a dictionary, using custom_deserializer to handle special cases
+            return deserialize(Job, data)
+        else:
+            return None
+
+
     def save(self, location=None, position=None, base_path=None):
         try:
             if location is None:
@@ -141,7 +155,7 @@ class Job:
             fn_op = f'{self.office_policy}' if self.office_policy.lower() in ['remote','hybrid','on-site'] else 'unk'
             fn_easy = 'easy' if self.is_easyApply else 'site'
             fn_relevant = 'rlv' if self.is_relevant else 'x_rlv'
-            fn = f'{self.date_time_string}.{fn_co}.{position}.{fn_op}.{fn_relevant}.{fn_easy}.{self.id}'
+            fn = f'{self.get_dt_string(fmt='%Y-%m-%d')}.{fn_co}.{position}.{fn_op}.{fn_relevant}.{fn_easy}.{self.id}'
 
             if self.is_relevant:
                 if self.office_policy.lower() == 'remote':
@@ -198,6 +212,8 @@ class Job:
         #self._created=datetime.datetime.now()
         self.set_date_time()
 
+    def get_list(self, header=True):
+        pass
     def get_json_string(self)->str:
         data = {
             "datetime": self.get_dt_string(ms=True),
@@ -231,7 +247,7 @@ class Job:
     def get_office_policy_from_raw_location(location: str = ""):
         office_policy = 'unk'
 
-        if location is None or len(location)==0:
+        if not is_valid_non_empty_string(location):
             #print(f'Unable to set office policy location is None or zero length')
             return office_policy
 
@@ -243,7 +259,7 @@ class Job:
 
     @staticmethod
     def get_location_from_raw(location: str=""):
-        if location is None or len(location)==0:
+        if not is_valid_non_empty_string(location):
             return location
         loc = location.split('(')
         loc = loc[0]
@@ -311,11 +327,13 @@ class Job:
                     ('Senior','Sr'),
                     ('Director', 'Dir'),
                     ('Manager', 'Mgr'),
+                    ('Management','Mgmt'),
                     ('Product', 'Prod'),
                     ('Vice President', 'VP'),
                     ('Software', 'SW'),
                     ('Engineering', 'Eng'),
                     ('Machine Learning','ML'),
+                    ('Artificial Intelligence','AI'),
                     ('Data Science', 'DS'),
                     ('Development', 'Dev'),
                     ('Business','Bus'),
@@ -349,7 +367,10 @@ class Job:
                     ('Performance', 'Perf'),
                     ('Business Intelligence', 'BI'),
                     ('Manufacturing', 'Manuf'),
-                    ('Information','Inf')
+                    ('Information','Inf'),
+                    ('Application','App'),
+                    ('Biostatistics','Biostat'),
+                    ('Statistics','Stat')
                 ]
                 for p, r in pattern_replacement_list:
                     txt = re.sub(p, r, txt, flags=re.IGNORECASE)
@@ -409,26 +430,34 @@ class Job:
         if name is None:
             return self.base_loc_path
         else:
-            return os.path.join(self.base_loc_path, self.is_relevant_str, loc, name)
+            return os.path.join(self.base_path, self.is_relevant_str, loc, name)
 
     def get_fname(self):
         self.set_date_time()  # setting it only if it has not been set before
         office_policy = f'.{self._office_policy}' if self._office_policy.lower() in ['remote', 'hybrid'] else ''
         co_name = f'.{self.truncated_co_name}' if self.truncated_co_name is not None else '.Co_'
         pos = f'.{self.abbreviated_position}'
-        fname = f'{self.date_time_string}{co_name}{pos}{office_policy}.{self.id}'
+        fname = f'{self.get_dt_string(fmt='%Y-%m-%d')}{co_name}{pos}{office_policy}.{self.id}'
         return fname
     @property
     def fname(self):
         return self.get_fname()
 
     @staticmethod
-    def get_base_path():
-        return EnvironmentKeys.get_key('OUTPUT_JOBS_DIRECTORY', False, r'data_folder\output\Jobs\name_s')
+    def get_base_path(dt:datetime.datetime = None):
+        if dt is None:
+            dt_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        else:
+            dt_str = dt.strftime("%Y-%m-%d")
+        return os.path.join(EnvironmentKeys.get_key('OUTPUT_JOBS_DIRECTORY', False, r'data_folder\output\Jobs\name_s'), dt_str).__str__()
 
     @property
     def base_path(self):
-        return Job.get_base_path()
+        if self._date_time is None:
+            dt = datetime.datetime.now()
+        else:
+            dt = self._date_time
+        return Job.get_base_path(dt)
 
     @property
     def base_loc_path(self):
@@ -437,9 +466,9 @@ class Job:
     @property
     def loc_path(self)->str:
         loc = ''
-        if self.search_location is not None and len(self.search_location)>0:
+        if is_valid_non_empty_string(self.search_location):
             loc = self.search_location
-        elif self.location is not None and len(self.location)>0:
+        elif is_valid_non_empty_string(self.location):
             loc_split = self.location.split(',')
             if len(loc_split)>1:
                 loc = loc_split[1].strip()

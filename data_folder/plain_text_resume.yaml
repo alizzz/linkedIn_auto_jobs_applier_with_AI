@@ -1,6 +1,6 @@
 personal_information:
-  name: "[Your Name]"
-  surname: "[Your Surname]"
+  name: "Tatiana"
+  surname: ""
   date_of_birth: "[DD/MM/YYYY]"
   country: "[Your Country]"
   city: "[Your City]"
@@ -28,6 +28,7 @@ education_details:
       [Course Name 3]: "[Grade]"
       [Course Name 4]: "[Grade]"
       [Course Name 5]: "[Grade]"
+
 
 experience_details:
   - position: "[Your Job Title]"

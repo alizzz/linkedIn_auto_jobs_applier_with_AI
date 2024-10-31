@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import List, Optional, Any, Tuple
 import re
 import json
-from selenium.common.exceptions import NoSuchElementException
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.support import expected_conditions as EC
 import src.utils as utils
 from src.utils import EnvironmentKeys
 from src.utils import printcolor, printyellow, printred
@@ -36,6 +36,29 @@ def wait_page_to_load(driver, timeout=10, post_sleep=(1.0, 2.5)):
             time.sleep(random.uniform(*post_sleep))
     except:
         print("Page load timed out.")
+
+def find_element_with_wait(driver, by:By, value:str, timeout=5, post_sleep=(1.0, 2.5) ):
+    try:
+        element = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((by, value))
+        )
+        if post_sleep is not None:
+            time.sleep(random.uniform(*post_sleep))
+        return element
+    except Exception as e:
+        print(f"Element not found: {value}. Error: {e}")
+        return None
+
+def find_elements_with_wait(driver, by:By, value:str, timeout=5, post_sleep=(1.0, 2.5) ):
+    try:
+        # Wait until at least one element is present on the page
+        WebDriverWait(driver, timeout).until(
+            lambda d: len(d.find_elements(by, value)) > 0
+        )
+        return driver.find_elements(by, value)
+    except Exception as e:
+        print(f"Elements not found: {value}. Error: {e}")
+        return []
 
 class JobSearchElement:
     def __init__(self, tile: Any, driver, job:Job=None):
@@ -135,7 +158,11 @@ class JobSearchElement:
         office_policy:str=None
         experience_level:str=None
         try:
-            insigts = [x.text for x in self.rc.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__job-insight").find_elements(By.TAG_NAME, 'span')[1:]]
+            elem = self.rc.find_element(By.CLASS_NAME, 'job-details-preferences-and-skills')
+            if elem is None:
+                elem = self.rc.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__job-insight")
+
+            insigts = [x.text for x in elem.find_elements(By.TAG_NAME, 'span')]
             for x in insigts:
                 if x is not None:
                     if '$' in x:
@@ -503,7 +530,19 @@ class LinkedInJobManager:
         except Exception as e:
             pass
         try:
-            job_insight_list = [x.text for x in self.driver.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__job-insight").find_elements(By.TAG_NAME, 'span')]
+            elem = self.driver.find_element(By.CLASS_NAME, 'job-details-preferences-and-skills')
+            if elem is None:
+                elem = self.driver.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__job-insight")
+
+
+            if elem is None:
+                raise NoSuchElementException('Salary-OfficePolicy-ExperienceLevel not found')
+
+            elem_arr = elem.find_elements(By.TAG_NAME, 'span')
+            if elem_arr is None or len(elem_arr)==0:
+                raise NoSuchElementException('Can not find span elements in Salary-OfficePolicy-ExperienceLevel')
+
+            job_insight_list = [x.text for x in elem_arr]
             #['$203K/yr - $317K/yr Hybrid Full-time Executive', '$203K/yr - $317K/yr', 'Hybrid', 'Full-time', 'Executive'
             for x in job_insight_list[1:]:
                 if '$' in x:
@@ -513,6 +552,7 @@ class LinkedInJobManager:
                 elif x.lower() in ['internship', 'level', 'associate', 'director', 'executive']:
                     job.experience_level = x
         except Exception as e:
+            printred(f'Exception while loading salary-office policy: Error: {e}:{traceback.format_exc()}')
             pass
 
         return job
@@ -535,7 +575,9 @@ class LinkedInJobManager:
             c = 0
             for job_element in job_list_elements:
                 try:
-                    job_element_a_details = job_element.find_element(By.TAG_NAME, 'a')
+                    job_element_a_details = find_element_with_wait(job_element, by=By.TAG_NAME, value='a')
+                    #job_element_a_details = job_element.find_element(By.TAG_NAME, 'a')
+                    if job_element_a_details is None: raise NoSuchElementException(f'Unable to locate element by tag "a" from {job_element}')
                     id = Job.get_id_from_link(job_element_a_details.get_attribute('href'))
                     job_is_found = find_job_in_path(id, Job.get_base_path())
                     if  job_is_found:
@@ -589,6 +631,8 @@ class LinkedInJobManager:
                     printyellow(e)
                 except OutOfPolicyError as e:
                     printyellow(e)
+                except NoSuchElementException as e:
+                    printyellow(f'Exception while processing job {c+1}. Error {e}')
                 except Exception as e:
                     printred(f'Exception while processing job {c+1}. Error {e}')
                     print(traceback.format_exc())

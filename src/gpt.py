@@ -12,7 +12,7 @@ from langchain_core.prompt_values import StringPromptValue
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from Levenshtein import distance
-from src.utils import EnvironmentKeys
+from src.utils import EnvironmentKeys, is_valid_non_empty_string
 import src.strings as strings
 from src.job import Job
 from lib_resume_builder_AIHawk.config import GlobalConfig
@@ -171,17 +171,17 @@ class GPTAnswerer:
             if job.job_description_summary is not None and len(job.job_description_summary)>0:
                 job_desc=job.job_description_summary
             else:
-                if job.description is None or len(job.description)==0:
+                if not is_valid_non_empty_string (job.description):
                     raise Exception('Both job description and job description summary are empty. Unable to continue')
                 job_desc = job.description
             #ToDo Load prompt from file (or dict)
             prompt_is_relevant="""You are an experienced HR professional and job desciption analyst. 
             Read the job description and thoroughly analyze it. Answer the question if this job is relevant to {relevance_criteria}. 
-            Answer only the relevance and your confidence in the answer using the following valid json of the following format
-            'relevant': 'Yes'  or 'No',
-            'confidence': how confident are you,
-            'industry':what industry job is in,
-            'job family': job family
+            Answer only the relevance and your confidence in the answer. Respond with the valid json using the following format
+            "relevant": "Yes"  or "No",
+            "confidence": how confident are you,
+            "industry": what industry job is in,
+            "job family": job family
 
             **Job description** 
               {job_desc}
@@ -194,12 +194,12 @@ class GPTAnswerer:
             chain = prompt | self.llm_cheap | StrOutputParser()
             output = chain.invoke({"relevance_criteria": relevance_criteria, "job_desc": job_desc})
             j = json.loads(output, strict=False)
-            job.relevancy=j['relevant']
+            job.relevancy=j["relevant"]
             job.is_relevant_confidence = j['confidence']
             job.industry=j['industry']
             job.family = j['job family']
             relevant = j["relevant"].lower() in ['yes','y','true','t']
-            print(f'Is_relevant returns {output}')
+            print(f'Is_relevant for {job.title} at {job.company} returns {output}')
         except Exception as e:
             print(f'Exception in is_relevant position. Error: {e}')
 

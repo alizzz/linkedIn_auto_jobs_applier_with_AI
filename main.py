@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import re
+import csv
 import sys
 import base64
 import traceback
@@ -18,7 +19,8 @@ from selenium.webdriver.common.by import By
 from src.job import Job
 from src.utils import chromeBrowserOptions
 from src.utils import printcolor, printyellow, printred
-from src.utils import EnvironmentKeys, make_valid_path
+from src.utils import EnvironmentKeys, make_valid_path, is_valid_non_empty_string, custom_job_deserializer
+from src.utils import dataclass_to_list, dataclass_to_field_names
 from src.gpt import GPTAnswerer
 from src.linkedIn_authenticator import LinkedInAuthenticator
 from src.linkedIn_bot_facade import LinkedInBotFacade
@@ -307,6 +309,18 @@ class ClickParam():
     easy_apply: bool = None
     mode:str=None
 
+def make_html_from_txt(txt:str, parameters, bot:LinkedInBotFacade):
+    if not is_valid_non_empty_string(txt): return None
+    if bot is None: return None
+
+    txt_str=txt
+    if os.path.exists(txt):
+        with open(txt, 'r', encoding='utf-8') as f:
+            txt_str = f.read()
+
+
+    bot.generate_resume_from_url()
+
 def convert_(clickParam:ClickParam ):
     try:
         src_html = clickParam.src_html
@@ -423,7 +437,14 @@ def save_job_list(jobs, location):
 @click.option('--llm', type=str, default='gpt-4o', help="LLM model")
 @click.option('--src_html', type=str, default=None, help="Run just conversion of html file to pdf. --resume option is required")
 @click.option('--easy_apply', is_flag=True, help='If shall continue to fill in easy_apply')
-@click.option('--mode', type=click.Choice(['search_apply', 'convert', 'resume_lkdin', 'apply_txt', 'apply_url', 'search_lkdin']), default='search_apply', help='Mode of operation choose one of - search and apply(default), convert html to pdf and text, apply one that is provide')
+#mode -search_apply
+#mode -convert
+#mode -resume_lkdin
+#mode -apply_txt
+#mode -apply_url
+#mode -search_lkdin
+#mode -create_local
+@click.option('--mode', type=click.Choice(['search_apply', 'convert', 'resume_lkdin', 'apply_txt', 'apply_url', 'search_lkdin', 'create_local']), default='search_apply', help='Mode of operation choose one of - search and apply(default), convert html to pdf and text, apply one that is provide')
 def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_template,
          lkdn, job_url, linkedin_id, job_file_desc, llm_cheap, llm, src_html, easy_apply, mode):
 
@@ -524,7 +545,48 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
             if jobs is not None and len(jobs)>0:
                 job_list+=jobs
                 no_expected+=nn
-                save_job_list(jobs, location)
+
+                #ToDo write code to save jobs as json file
+                try:
+                    jobs_ = []
+                    if os.path.exists(os.path.join(jobs[0].base_path, 'job_list.json')):
+                        #read existing json
+                        with open(os.path.join(jobs[0].base_path, 'job_list.json'),'r', encoding='utf-8') as f:
+                            j = f.read()
+                            jobs_ = [Job(**x) for x in json.loads(j)]
+
+                    jobs_ += jobs
+                    #save list of jobs to json file
+                    with open(os.path.join(jobs[0].base_path, 'job_list.json'), 'w', encoding='utf-8') as f:
+                        f.write(json.dumps(jobs_, default=custom_job_deserializer()))
+                except Exception as e:
+                    printred(f'Exception while saving list of jobs. Error: {e}')
+
+                #save jobs to csv
+                try:
+                    header = ''
+                    base_path_csv = os.path.dirname(jobs[0].base_path)
+                    file_path = os.path.join(base_path_csv, 'job_list.csv')
+                    print(f'Saving csv for {len(jobs)} jobs to file: {file_path}')
+                    if not os.path.exists(file_path): #file doesn't exist. Creating header
+                        # writing header
+                        with open(file_path, 'a', newline='') as file:
+                            writer = csv.writer(file)
+                            writer.writerow(dataclass_to_field_names(jobs[0]))
+
+                    for job in jobs:
+                        try:
+                           new_row = dataclass_to_list(job)
+                           with open(file_path, 'a', newline='') as file:
+                               writer = csv.writer(file)
+                               writer.writerow(new_row)
+                             # Write the new row to the file
+                               #print(f"Added line {','.join(new_row)}")
+                        except Exception as e:
+                            print(f'Exception while saving csv: {e}')
+                except:
+                    pass
+                #save_job_list(jobs, location)
                 print(f'Expected: {nn} jobs. Retrieved {len(jobs)} jobs from {location} for {position}')
 
         print(f'Expected: {no_expected} jobs. Retrieved {len(job_list)} jobs from {len(searches)} searches')
@@ -534,8 +596,53 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
 
         exit_(exit_code, start_time)
 
+    if mode=='create_local':
+        try:
+            path_jobs = jobs
+            if path_jobs is None:
+                printred(f'Path to the folder with downloaded data is required')
+                exit_(3)
 
+            matching_files = []
+            bot = create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
+                             browser=None)
 
+                # Walk through the file system starting from the given path
+            #(os.path.dirname(__file__), path_jobs)
+            for root, dirs, files in os.walk(path_jobs):
+                try:
+                    for file in files:
+                        if file.endswith('.pdf'):
+                            raise FileExistsError(f'PDF exists in a folder {root}')#already processed, skipping
+                    for file in files:
+                        if file=='job.json':
+                            # Append the full path of the matching file
+                            json_path = os.path.join(root, file)
+                            #load json
+
+                            with open(json_path, 'r', encoding='utf-8') as json_file:
+                                data = json.load(json_file, object_hook=custom_job_deserializer)
+                                if data is  not None:
+                                    job = Job(**data)
+                                    if job is not None:
+                                        bot.generate_resume_from_job(job, path=root)
+                                    else:
+                                        raise ValueError(f'Unable to create job from dict {data}')
+                                else:
+                                    raise json.JSONDecodeError('Failed to deserialize json data')
+
+                except FileExistsError as e:
+                    print(f"{e}")
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON in file {json_path}: {e}")
+                except Exception as e:
+                    print(f"Error reading file {json_path}: {e}")
+        except Exception as e:
+            print(f'Exception in create resume from job. Error:{e}')
+            print(f'Traceback: {traceback.format_exc()}')
+            exit(10)
+
+        exit_(0, start_time=start_time)
     #scan and apply
     try:
         # only one (or none) of the job options are allowed. If more than one is specified, only the first valid one is used
@@ -576,4 +683,11 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
 
 
 if __name__ == "__main__":
+    #job = Job()
+    #s = dataclass_to_field_names(job)
+    #print(s)
+    #ss=dataclass_to_list(job)
+    #print(ss)
+    #print(f'{len(s)}:{len(ss)}')
+    #exit(0)
     main()

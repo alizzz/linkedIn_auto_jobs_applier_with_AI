@@ -9,10 +9,11 @@ from src.gpt import GPTAnswerer
 from src.linkedIn_authenticator import LinkedInAuthenticator
 from src.linkedIn_job_manager import LinkedInJobManager
 from src.job_application_profile import JobApplicationProfile
+from src.job import Job
 from lib_resume_builder_AIHawk.utils import HTML_to_PDF
 from lib_resume_builder_AIHawk import Resume,StyleManager,FacadeManager,ResumeGenerator
-from src.utils import make_valid_path
-
+from src.utils import make_valid_path, read_file_content, is_valid_non_empty_string
+from lib_resume_builder_AIHawk.resume import PersonalInformation
 
 class LinkedInBotState:
     def __init__(self):
@@ -146,6 +147,84 @@ class LinkedInBotFacade:
             _file_name = f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}.Resume.frm_txt'
             self._generate_resume(url=None, text=text, file_name_out=_file_name)
 
+
+    def get_resume_fn(self, pi:PersonalInformation, param=None):
+        return f'{pi.name}.{pi.surname}.Resume'
+
+    #Notes:
+    #at least one of job, desc, or desc_summary should be not None
+    def generate_resume_from_job_desc(self, job=None, desc:str=None, desc_summary:str=None):
+        desc_str = None
+        desc_summary_str = None
+        job_obj = None
+        if sum([job is None, desc is None, desc_summary is None])==0: raise ValueError('Error in generate_resume_from_job_desc: at least one of job, desc, or desc_summary should be not None')
+        if desc is not None:
+            desc_str = read_file_content(desc) if os.path.exists(desc) else desc
+        if desc_summary is not None:
+            desc_summary_str = read_file_content(desc_summary) if os.path.exists(desc_summary) else desc_summary
+        if job is not None:
+            if type(job).__name__=='str':
+                #if valid file try deserializing it from file, otherwise try deserializing it from string
+                if os.path.exists(job):
+                    job_string = read_file_content(job)
+                    if job_string is not None:
+                        job_obj = Job.deserialize(job_string)
+                        if job_obj is None or type(job_obj).name!='Job':
+                            job = None
+                        else:
+                            job = job_obj
+
+            elif type(job).__name__ != 'Job': job=None
+
+            if sum([is_valid_non_empty_string(desc_str), is_valid_non_empty_string(desc_summary_str)])>0:
+                job_desc_str = '\n'.join([desc_summary_str if is_valid_non_empty_string(desc_summary_str) else '',
+                                          desc_str if is_valid_non_empty_string(desc_str) else ''])
+            else:
+                job_desc_str = '\n'.join([job.job_description_summary if is_valid_non_empty_string(job.job_description_summary) else '',
+                                          job.description if is_valid_non_empty_string(job.description) else ''])
+
+            if not is_valid_non_empty_string(job_desc_str): raise ValueError(f'generate_resume_from_job_desc() no valid job description')
+
+    def generate_resume_from_job(self, job:Job, relevant_only=False, path=None):
+        if job is None:
+            if is_valid_non_empty_string(path):
+                #attempt deserializing job from job.json file from path
+                job_json_path = os.path.join(path, 'job.json')
+                if os.path.exists(job_json_path):
+                    job_json_str = read_file_content(job_json_path)
+                    if is_valid_non_empty_string(job_json_str):
+                        job = Job.deserialize(job_json_str)
+
+        if job is None: #check again if deserialization worked
+            raise AttributeError('generate_resume_from_job() - job is None and unable to deserialize from path')
+        if not is_valid_non_empty_string(path): path = job.path
+        if is_valid_non_empty_string(job.relevancy) and job.relevancy.lower != 'unk':
+            is_relevant = job.is_relevant
+        else:
+            is_relevant = self.apply_component.gpt_answerer.is_relevant_job(job)
+
+        if not is_valid_non_empty_string(job.description) and not is_valid_non_empty_string(job.job_description_summary):
+            raise ValueError('in generate_resume_from_job. both job.description and job_description summary are not valid string. unable to continue' )
+
+        fn_resume = self.get_resume_fn(self.resume.personal_information, None)
+        out_path = path
+
+        if relevant_only and not is_relevant:
+            print(
+                f'Relevant_only is {relevant_only} and job relevancy is {job.is_relevant_str}. Skipping resume generation for url {url}, jobid={job.id}')
+        else:
+            if is_valid_non_empty_string(job.description) and not is_valid_non_empty_string(job.job_description_summary):
+                jd_summary = self.apply_component.gpt_answerer.summarize_job_description(job.description)
+                job.set_job_description_summary(jd_summary)
+
+            desc = '\n'.join([job.job_description_summary if is_valid_non_empty_string(job.job_description_summary) else '',
+                              job.description if is_valid_non_empty_string(job.description) else ''])
+            if len(desc)<50:
+                raise ValueError(f'In generate_resume_from_job(). Job object does not contain valid job description. job-description: {job.description}. Job-description_summary: {job.job_description_summary}')
+
+            self._generate_resume(url=None, text=desc, file_name_out=fn_resume, path=out_path)
+
+
     #This method has a few side effects
     #0. It creates an output directory if it doesn't exist
     #1. it creates at writes resume html
@@ -154,21 +233,12 @@ class LinkedInBotFacade:
     #4. it writes job summary
     def generate_resume_from_url(self, url, relevant_only=False, is_linkedin:bool=True):
         job = self.apply_component.load_job_from_url(url)
-        is_relevant = self.apply_component.gpt_answerer.is_relevant_job(job)
-
-        fn_resume = f'{self.resume.personal_information.name}_{self.resume.personal_information.surname[0]}.Resume'
-        #fn_job_desc = f'{job.fname}.job.desc.{make_valid_path(job.apply_method)}.txt'
         fn_job_desc = f'job.desc.{make_valid_path(job.apply_method)}.{job.is_relevant_str}.txt'
         fn_job_json = f'job.{job.id}.json'
         out_path = job.path
 
-        if relevant_only and not is_relevant:
-            print(f'Relevant_only is {relevant_only} and job relevancy is {job.is_relevant_str}. Skipping resume generation for url {url}, jobid={job.id}')
-        else:
-            self._generate_resume(url=None, text=job.description, file_name_out=fn_resume, path=out_path)
-            if job.job_description_summary is None or len(job.job_description_summary) == 0:
-                jd_summary = self.apply_component.gpt_answerer.summarize_job_description(job.description)
-                job.set_job_description_summary(jd_summary)
+        self.generate_resume_from_job(job, relevant_only, is_linkedin)
+
 
 
         os.makedirs(out_path, exist_ok=True)
@@ -197,8 +267,14 @@ class LinkedInBotFacade:
 
             pdf_data = base64.b64decode(pdf64)
 
-            with open(os.path.join(output_folder, f'{file_name_out}.pdf'), "xb") as f:
-                f.write(pdf_data)
+            fn = os.path.join(output_folder, f'{file_name_out}.pdf')
+            if os.path.exists(fn):
+                k=0
+                fn = os.path.join(output_folder, f'{file_name_out}.{k:03}.pdf')
+                while(os.path.exists(fn)):
+                    k+=1
+                    fn = os.path.join(output_folder, f'{file_name_out}.{k:03}.pdf')
+            with open(fn, "xb") as f: f.write(pdf_data)
         except Exception as e:
             print(f"Exception generating resume from url {url}. Error {e}")
             print(f'Traceback {traceback.format_exc()}')
