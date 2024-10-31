@@ -1,10 +1,10 @@
 import os
 import click
 import datetime
-from lib_resume_builder_AIHawk.utils import printcolor, printred, printyellow
+from src.utils import printc
 from lib_resume_builder_AIHawk.utils import HTML_to_PDF
 
-class Utils():
+class Utils:
     @staticmethod
     def isdirfile(path)->(bool, bool):
         if not os.path.exists(path):
@@ -14,7 +14,7 @@ class Utils():
     @staticmethod
     def dirwalk(path, ext='.html'):
         file_list = []
-        for root, dir, files in os.walk(path):
+        for root, _, files in os.walk(path):
             for file in files:
                 if file.endswith(ext):
                     file_list.append((root, file))
@@ -32,8 +32,9 @@ class Utils():
 @click.option('--overwrite','-o', is_Flag=True, help="Run just conversion of html file to pdf.")
 def html2(src, dst, recursive, pdf, txt, overwrite):
     start_time = datetime.datetime.now()
-    printcolor(f'Process started @ {start_time.strftime("%Y-%m-%d %H:%M:%S")}', "Blue")
-
+    printc.printcolor(f'Process started @ {start_time.strftime("%Y-%m-%d %H:%M:%S")}', "Blue")
+    
+    dir = None
     src_ = None
     dst_ = None
     try:
@@ -48,15 +49,15 @@ def html2(src, dst, recursive, pdf, txt, overwrite):
                     html_files.append(os.path.join(src, file.rsplit('.',1)[0]))
 
             if len(html_files)==0:
-                printred(f"There's no .html files in src directory {src}. Aborting")
+                printc.printred(f"There's no .html files in src directory {src}. Aborting")
                 exit(3)
             if len(html_files)>1:
-                printyellow(f"There's more than one html file in directory {src}. Using the first one {html_files[0]}. Other files are {html_files[1:]}")
+                printc.printyellow(f"There's more than one html file in directory {src}. Using the first one {html_files[0]}. Other files are {html_files[1:]}")
 
             src_ = os.path.join(src, html_files[0])
             dst_ = os.path.join(src, html_files[0].rsplit('.',1)[0])
     except Exception as e:
-        printred(f'src path should be string, os.PathLike. Received {src}. Error {e}')
+        printc.printred(f'src path should be string, os.PathLike. Received {src}. Error {e}')
         exit(2)
 
     if dir:
@@ -76,7 +77,7 @@ def html2(src, dst, recursive, pdf, txt, overwrite):
         #html_2_txt(resume_file=html2pdf, by=(By.TAG_NAME, 'body'))
 
     end_time = datetime.datetime.now()
-    printcolor(
+    printc.printcolor(
         f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time - start_time}',
         "Blue")
     return

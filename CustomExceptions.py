@@ -7,6 +7,8 @@ class NoJobsOnPageError(Exception):
         if self.error_code:
             return f"[No jobs on page found {self.error_code}]: {self.args[0]}"
         return self.args[0]
+
+
 class NotRelevantError(Exception):
     def __init__(self, message="", error_code=None):
         super().__init__(message)
@@ -17,6 +19,7 @@ class NotRelevantError(Exception):
             return f"[Error {self.error_code}]: {self.args[0]}"
         return self.args[0]
 
+
 class AlreadyRetrievedError(Exception):
     def __init__(self, message="", error_code=None):
         super().__init__(message)
@@ -26,6 +29,7 @@ class AlreadyRetrievedError(Exception):
         if self.error_code:
             return f"[Error {self.error_code}]: {self.args[0]}"
         return self.args[0]
+
 
 class OutOfPolicyError(Exception):
     def __init__(self, message="", error_code=None):

@@ -1,6 +1,5 @@
 import click
 import json
-import os
 import csv
 from pathlib import Path
 

@@ -5,7 +5,7 @@ import re
 from typing import Type, TypeVar
 from dataclasses import dataclass, asdict, astuple
 import pathlib
-from src.utils import printcolor,printred,printyellow
+from src.utils import printc
 from src.utils import EnvironmentKeys
 from src.utils import is_valid_non_empty_string, make_valid_os_path_string, make_valid_path, get_state_from_loc, get_id_from_linkedin_url
 from src.utils import custom_job_serializer, deserialize
@@ -173,25 +173,25 @@ class Job:
                 with open(os.path.join(path, fn, 'desc.txt'), 'w', encoding='utf-8') as f:
                     f.write(self.description)
             except Exception as e:
-                printred(f'ERROR while saving job description for job id {self.id}. Error: {e}')
+                printc.printred(f'ERROR while saving job description for job id {self.id}. Error: {e}')
             try:
                 with open(os.path.join(path, fn, 'desc_summary.txt'), 'w', encoding='utf-8') as f:
                     f.write(self.job_description_summary)
             except Exception as e:
-                printred(f'ERROR while saving job description summary for job id {self.id}. Error: {self.id}')
+                printc.printred(f'ERROR while saving job description summary for job id {self.id}. Error: {self.id}')
             try:
                 with open(os.path.join(path, fn, 'job.json'), 'w', encoding='utf-8') as f:
                     s = self.serialize()
                     f.write(s)
             except Exception as e:
-                printred(f'ERROR while serializing job id {self.id}. Error: {self.id}')
+                printc.printred(f'ERROR while serializing job id {self.id}. Error: {self.id}')
             try:
                 with open(os.path.join(path, fn, f'job_{self.id}.url'), 'w') as f:
                     f.write(f"[InternetShortcut]\nURL={self.link}\n")
             except Exception as e:
-                printred(f"Exception while saving shortcut for id {self.id}. Error {e}")
+                printc.printred(f"Exception while saving shortcut for id {self.id}. Error {e}")
         except Exception as e:
-            printred(f'ERROR while saving job id {self.id}. Error: {self.id}')
+            printc.printred(f'ERROR while saving job id {self.id}. Error: {self.id}')
             print(traceback.format_exc())
 
     @property
@@ -237,7 +237,7 @@ class Job:
         try:
             return json.dumps(data, indent = 4)
         except:
-            printred(f"ERROR: failed to create a json object in get_json_string for job id {self.id}")
+            printc.printred(f"ERROR: failed to create a json object in get_json_string for job id {self.id}")
             return '{}'
 
     @staticmethod

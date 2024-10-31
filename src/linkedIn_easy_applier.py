@@ -13,7 +13,7 @@ import traceback
 import wcwidth
 
 from src.job import Job
-from src.utils import printcolor, printred, printyellow, EnvironmentKeys
+from src.utils import printc, EnvironmentKeys
 from typing import List, Optional, Any, Tuple
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -71,7 +71,7 @@ class LinkedInEasyApplier:
                     if not( is_resume and is_job_desc):
                         resume_warning_string = '' if is_resume else 'Resume file does not'
                         job_desc_warning_string = '' if is_job_desc else 'Job description file does not'
-                        printyellow(
+                        printc.printyellow(
                             f"ASSERT: {job.path} exists but {resume_warning_string}{' ' if is_resume and is_job_desc else ' and '}{job_desc_warning_string}")
                         res = True
 
@@ -97,9 +97,9 @@ class LinkedInEasyApplier:
 
             #gpt_answerer.set_job(job) uses job description to determine pay range. It has to be called prior to set_job()
             self.gpt_answerer.set_job(job)
-            printcolor(f'About to start creating resume for job id {job.id} in {job.get_base_loc_path()}\\{job.resume_path}', 'blue')
+            printc.printcolor(f'About to start creating resume for job id {job.id} in {job.get_base_loc_path()}\\{job.resume_path}', 'blue')
             self._create_resume(job)
-            printcolor(f'Finished creating resume for job id {job.id} in {job.get_base_loc_path()}\\{job.resume_path}', 'green')
+            printc.printcolor(f'Finished creating resume for job id {job.id} in {job.get_base_loc_path()}\\{job.resume_path}', 'green')
             self._create_cover(job)
 
             if job.is_easyApply:
@@ -351,7 +351,7 @@ class LinkedInEasyApplier:
         #base_path_created = os.path.join(base_folder_path, 'JohnDoe')
 
         if job.abbreviated_position is None or len(job.abbreviated_position)==0:
-            printyellow(f'Warning: abbreviated position should have been set already. Jobid: {job.id}')
+            printc.printyellow(f'Warning: abbreviated position should have been set already. Jobid: {job.id}')
             c, p = self.gpt_answerer._sanitize_and_abbreviate_position(position=job.title, company_name=job.company)
             job._abbreviated_position = p
             job.truncated_co_name = c

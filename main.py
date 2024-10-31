@@ -14,35 +14,17 @@ from dataclasses import dataclass
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import WebDriverException, TimeoutException
+from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.by import By
 from src.job import Job
 from src.utils import chromeBrowserOptions
-from src.utils import printcolor, printyellow, printred
-from src.utils import EnvironmentKeys, make_valid_path, is_valid_non_empty_string, custom_job_deserializer, is_valid_linkedin_id, find_jobs_in_path
+from src.utils import printc
+from src.utils import EnvironmentKeys, make_valid_path, custom_job_deserializer, is_valid_linkedin_id, find_jobs_in_path, get_id_from_linkedin_url
 from src.utils import dataclass_to_list, dataclass_to_field_names
-from src.gpt import GPTAnswerer
-from src.linkedIn_authenticator import LinkedInAuthenticator
 from src.linkedIn_bot_facade import LinkedInBotFacade
-from src.linkedIn_job_manager import LinkedInJobManager
-from src.job_application_profile import JobApplicationProfile
 from src.file_manager import FileManager
 from src.config import linkedin_url_fmt
 from lib_resume_builder_AIHawk.utils import HTML_to_PDF
-from lib_resume_builder_AIHawk import Resume,StyleManager,FacadeManager,ResumeGenerator
-#from lib_resume_builder_AIHawk.utils import get_dict_names_from_dir
-
-
-from string import Template
-from typing import Any
-from lib_resume_builder_AIHawk.gpt_resume import LLMResumer
-from lib_resume_builder_AIHawk.gpt_resume_job_description import LLMResumeJobDescription
-from lib_resume_builder_AIHawk.module_loader import load_module
-from lib_resume_builder_AIHawk.config import global_config
-
-
-import os
-import re
 
 import context
 
@@ -162,7 +144,7 @@ def init_browser() -> webdriver.Chrome:
 def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_key: str):
     try:
         browser = init_browser()
-        bot = LinkedInBotFacade.create_bot(email=email, openai_api_key= openai_api_key, parameters= parameters, browser=browser, password = password)
+        bot = LinkedInBotFacade.create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, browser=browser, password=password)
 
         job_desc = parameters['job_desc']
         if job_desc[0]:
@@ -212,7 +194,7 @@ def validate_url(url):
 def validate_linkedin_id(linkedin_job_id):
     return is_valid_linkedin_id(linkedin_job_id)
 
-def validate_linkedin_url(url: str):
+def is_valid_linkedin_url(url: str):
     if url is None or len(url)==0: return False
     try:
         # Parse the URL
@@ -225,6 +207,8 @@ def validate_linkedin_url(url: str):
     except:
         pass
     return False
+def validate_linkedin_url(url: str):
+    return is_valid_linkedin_url(url)
 
 def lkdn_url(data:str=None):
     if validate_linkedin_url(data): return data
@@ -308,18 +292,6 @@ class ClickParam():
     easy_apply: bool = None
     mode:str=None
 
-def make_html_from_txt(txt:str, parameters, bot:LinkedInBotFacade):
-    if not is_valid_non_empty_string(txt): return None
-    if bot is None: return None
-
-    txt_str=txt
-    if os.path.exists(txt):
-        with open(txt, 'r', encoding='utf-8') as f:
-            txt_str = f.read()
-
-
-    bot.generate_resume_from_url()
-
 def convert_(clickParam:ClickParam ):
     try:
         src_html = clickParam.src_html
@@ -349,7 +321,7 @@ def convert_(clickParam:ClickParam ):
                 html_2_pdf(resume_file=src_html)
                 html_2_txt(resume_file=src_html, by=(By.TAG_NAME, 'body'))
     except Exception as e:
-        printred(f'Exception in convert. Error: {e}')
+        printc.printred(f'Exception in convert. Error: {e}')
 
     return
 
@@ -359,7 +331,7 @@ def exit_(code:int=0, start_time:datetime.datetime=None, color:str='Blue'):
         end_time = datetime.datetime.now()
         exec_time = f' Execution time {end_time - start_time}'
     
-    printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. {exec_time}',color)
+    printc.printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. {exec_time}',color)
     exit(code)
 
 def save_job_list(jobs, location):
@@ -409,11 +381,11 @@ def save_job_list(jobs, location):
                 with open(os.path.join(path, fn, f'linkedin_job_{job.id}.url'), 'w', encoding='utf-8') as f:
                     f.write(f"[InternetShortcut]\nURL={job.link}\n")
             except Exception as e:
-                printred(f"Exception while saving job id {job.id}. Error {e}")
+                printc.printred(f"Exception while saving job id {job.id}. Error {e}")
                 print(traceback.format_exc())
 
     except Exception as ex:
-        printred(f"Exception while saving job list. Error {ex}")
+        printc.printred(f"Exception while saving job list. Error {ex}")
         print(traceback.format_exc())
 
 
@@ -448,7 +420,7 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
          lkdn, job_url, linkedin_id, job_file_desc, llm_cheap, llm, src_html, easy_apply, mode):
 
     start_time = datetime.datetime.now()
-    printcolor(f'Process started @ {start_time.strftime("%Y-%m-%d %H:%M:%S")}', "Blue")
+    printc.printcolor(f'Process started @ {start_time.strftime("%Y-%m-%d %H:%M:%S")}', "Blue")
 
     clickParam = ClickParam(resume, plain, secret, config, jobs, data_folder, debug, css, resume_template,
                             lkdn, job_url, linkedin_id, job_file_desc, llm_cheap, llm, src_html, easy_apply, mode)
@@ -491,10 +463,10 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
 
         os.environ['DEBUG'] = debug
         parameters['DEBUG'] = debug
-        printcolor(f'DEBUG flag is set to {debug}', 'Red')
+        printc.printcolor(f'DEBUG flag is set to {debug}', 'Red')
         # </editor-fold>
     except Exception as e:
-        printred(f'Failed while processing input paramters. Error: {e}')
+        printc.printred(f'Failed while processing input paramters. Error: {e}')
         exit_(100, start_time)
     # </editor-fold>
 
@@ -506,40 +478,53 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
     if mode=='resume_lkdin':
         print(f'In apply_lkdin. src={lkdn}')
         if lkdn is None: 
-            printred(f'lkdn paramter is None. Should be either valid linkedin url or id. Aborting')
+            printc.printred(f'lkdn paramter is None. Should be either valid linkedin url or id. Aborting')
             end_time = datetime.datetime.now()
-            printcolor(
+            printc.printcolor(
                 f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time - start_time}',
                 "Blue")
             exit_(201, start_time)
 
+        urls = []
         ids = []
-        if os.path.exists(lkdn) and os.path.isfile(lkdn):
+        if is_valid_linkedin_id(lkdn):
+            urls.append(lkdn_url(lkdn))
+            ids.append(lkdn)
+        elif is_valid_linkedin_url(lkdn):
+            urls.append(lkdn)
+            ids.append(get_id_from_linkedin_url(lkdn))
+        elif os.path.exists(lkdn) and os.path.isfile(lkdn):
             processed_ids = find_jobs_in_path(output_folder)
             with open(lkdn, 'r', encoding='utf-8') as f:
                 for line in f:
                     line = line.strip()
-                    if validate_linkedin_id(line):
+                    if is_valid_linkedin_id(line):
                         if line not in processed_ids:
-                            ids.append(line)
+                            urls.append(lkdn_url(line))
                         else:
-                            printyellow(f'{line} has been already processed')
+                            printc.printyellow(f'{line} has been already processed, skipping')
+                    if is_valid_linkedin_url(line):
+                        id = get_id_from_linkedin_url(line)
+                        if id not in processed_ids:
+                            urls.append(line)
+                            ids.append(id)
+                        else:
+                            printc.printyellow(f'{line} has been already processed, skipping')
         else:
-            ids = [lkdn]
-
-        print(f'{ids} jobs are ready to process')
+            printc.printred(f'Unknown lkdn format. Expected linkedin job ID, job url, or a file. Received: {lkdn}. Aborting')
+            exit_(code=400, start_time=start_time)
+        
+        print(f'{len(ids)} jobs are ready to process. {ids} ')
         with init_browser() as browser:
             bot = create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
                              browser=browser)
             bot.do_login()
 
-            for id in ids:
-                url=lkdn_url(id)
-                browser = None
+            for url in urls:
                 try:
                     bot.generate_resume_from_url(url)
                 except Exception as e:
-                    printred(f"Failed to create a resume from id: {line}")
+                    printc.printred(f"Failed to create a resume from id: {line}")
             #finally:
             #    browser.close()
             #    browser.quit()
@@ -579,7 +564,7 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
                     with open(os.path.join(jobs[0].base_path, 'job_list.json'), 'w', encoding='utf-8') as f:
                         f.write(json.dumps(jobs_, default=custom_job_deserializer()))
                 except Exception as e:
-                    printred(f'Exception while saving list of jobs. Error: {e}')
+                    printc.printred(f'Exception while saving list of jobs. Error: {e}')
 
                 #save jobs to csv
                 try:
@@ -619,7 +604,7 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
         try:
             path_jobs = jobs
             if path_jobs is None:
-                printred(f'Path to the folder with downloaded data is required')
+                printc.printred(f'Path to the folder with downloaded data is required')
                 exit_(3)
 
             matching_files = []
@@ -698,7 +683,7 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
         print("Refer to the general troubleshooting guide: https://github.com/feder-cr/LinkedIn_AIHawk_automatic_job_application/blob/main/readme.md#configuration")
 
     end_time = datetime.datetime.now()
-    printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time-start_time}', "Blue")
+    printc.printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time-start_time}', "Blue")
 
 
 if __name__ == "__main__":

@@ -211,7 +211,7 @@ class LinkedInBotFacade:
 
         if relevant_only and not is_relevant:
             print(
-                f'Relevant_only is {relevant_only} and job relevancy is {job.is_relevant_str}. Skipping resume generation for url {url}, jobid={job.id}')
+                f'Relevant_only is {relevant_only} and job relevancy is {job.is_relevant_str}. Skipping resume generation for jobid={job.id}')
         else:
             if is_valid_non_empty_string(job.description) and not is_valid_non_empty_string(job.job_description_summary):
                 jd_summary = self.apply_component.gpt_answerer.summarize_job_description(job.description)

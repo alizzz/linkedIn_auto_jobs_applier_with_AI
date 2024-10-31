@@ -23,12 +23,12 @@ def get_id_from_linkedin_url(url, pattern = r'linkedin\.com/.+?/(\d+)/'):
 
 def save_job_list(jobs, location):
     if jobs is None or len(jobs)==0:
-        printyellow(f'Warning: in save_job_list(): there is no jobs to save')
+        printc.printyellow(f'Warning: in save_job_list(): there is no jobs to save')
     try:
         for job in jobs:
             job.save(location=location)
     except Exception as ex:
-        printred(f"Exception while saving job list. Error {ex}")
+        printc.printred(f"Exception while saving job list. Error {ex}")
         print(traceback.format_exc())
 
 def is_valid_linkedin_id(linkedin_job_id):
@@ -288,29 +288,47 @@ def make_valid_path(primary_path_string: str, secondary_path_string: str = None,
 
     return valid_name
 
-def printcolor(text, color="none", intensity="none"):
-    RESET = "\033[0m"
-    colors = {
-        "none": 0,
-        "black": 30,
-        "red": 31,
-        "green": 32,
-        "yellow": 33,
-        "blue": 34,
-        "magenta": 35,
-        "cyan": 36,
-        "white": 37
-    }
+class printc:
+    @staticmethod
+    def printcolor(text, color="none", intensity="none"):
+        RESET = "\033[0m"
+        colors = {
+            "none": 0,
+            "black": 30,
+            "red": 31,
+            "green": 32,
+            "yellow": 33,
+            "blue": 34,
+            "magenta": 35,
+            "cyan": 36,
+            "white": 37
+        }
 
-    intensity_offsets = {
-        "none": 0,
-        "normal": 0,
-        "bright": 60
-    }
-    _color = colors.get(color.lower(), 0)
-    _offset = intensity_offsets.get(intensity.lower(), 0)
-    COLOR = f"\033[{_color+_offset}m"
-    print(f"{COLOR}{text}{RESET}")
+        intensity_offsets = {
+            "none": 0,
+            "normal": 0,
+            "bright": 60
+        }
+        _color = colors.get(color.lower(), 0)
+        _offset = intensity_offsets.get(intensity.lower(), 0)
+        COLOR = f"\033[{_color+_offset}m"
+        print(f"{COLOR}{text}{RESET}")
+
+    @staticmethod
+    def printred(text):
+        # Codice colore ANSI per il rosso
+        RED = "\033[91m"
+        RESET = "\033[0m"
+        # Stampa il testo in rosso
+        print(f"{RED}{text}{RESET}")
+
+    @staticmethod
+    def printyellow(text):
+        # Codice colore ANSI per il giallo
+        YELLOW = "\033[93m"
+        RESET = "\033[0m"
+        # Stampa il testo in giallo
+        print(f"{YELLOW}{text}{RESET}")
 
 def get_state_from_loc(loc, pattern = r",?\s([A-Z]{2})$|,\s([A-Za-z\s]+)$", valid_path = True):
     if loc is None: return 'None'
@@ -321,22 +339,10 @@ def get_state_from_loc(loc, pattern = r",?\s([A-Z]{2})$|,\s([A-Za-z\s]+)$", vali
         else:
             return make_valid_path(loc) if valid_path else loc
     except Exception as e:
-        printred(f'Failed get_state_from loc. Loc={loc}, error = {e}')
+        printc.printred(f'Failed get_state_from loc. Loc={loc}, error = {e}')
     return loc  # Return None if no match is found
 
-def printred(text):
-    # Codice colore ANSI per il rosso
-    RED = "\033[91m"
-    RESET = "\033[0m"
-    # Stampa il testo in rosso
-    print(f"{RED}{text}{RESET}")
 
-def printyellow(text):
-    # Codice colore ANSI per il giallo
-    YELLOW = "\033[93m"
-    RESET = "\033[0m"
-    # Stampa il testo in giallo
-    print(f"{YELLOW}{text}{RESET}")
 
 def process_items(input_json):
     # Parse the input JSON into a list of dictionaries
