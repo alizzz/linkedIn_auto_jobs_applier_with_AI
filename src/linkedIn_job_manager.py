@@ -59,7 +59,7 @@ def find_elements_with_wait(driver, by:By, value:str, timeout=5, post_sleep=(1.0
         )
         return driver.find_elements(by, value)
     except Exception as e:
-        print(f"Elements not found: {value}. Error: {e}")
+        print(f"Elements not found: {value}")
         return []
 
 class JobSearchElement:
@@ -532,9 +532,9 @@ class LinkedInJobManager:
         except Exception as e:
             pass
         try:
-            elem = self.driver.find_element(By.CLASS_NAME, 'job-details-preferences-and-skills')
+            elem = find_element_with_wait(self.driver, By.CLASS_NAME, 'job-details-preferences-and-skills')
             if elem is None:
-                elem = self.driver.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__job-insight")
+                elem = find_element_with_wait(self.driver, By.CLASS_NAME, "job-details-jobs-unified-top-card__job-insight")
 
 
             if elem is None:

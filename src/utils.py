@@ -36,12 +36,14 @@ def is_valid_linkedin_id(linkedin_job_id):
     return bool(re.fullmatch(r'\d{1,12}', linkedin_job_id))
 def find_jobs_in_path(path):
     if not os.path.exists(path): return []
-    jobs = []
+    jobs = {}
     for root, dirs, _ in os.walk(path):
         for dir in dirs:
             id = dir.split('.')[-1]
             if is_valid_linkedin_id(id):
-                jobs.append(id)
+                jobs[id]=os.path.join(root,dir)
+
+    return jobs
 
 def is_job_in_path(id, path):
     if not is_valid_non_empty_string(id): return False

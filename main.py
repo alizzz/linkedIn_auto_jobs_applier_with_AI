@@ -133,38 +133,42 @@ class ConfigValidator:
 
 
 
-def init_browser() -> webdriver.Chrome:
+def init_browser(options = None) -> webdriver.Chrome:
     try:
-        options = chromeBrowserOptions()
-        service = ChromeService(ChromeDriverManager().install())
+        if options is None:
+            options = chromeBrowserOptions()
+        mgr = ChromeDriverManager().install()
+        service = ChromeService(mgr)
         return webdriver.Chrome(service=service, options=options)
     except Exception as e:
         raise RuntimeError(f"Failed to initialize browser: {str(e)}")
 
 def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_key: str):
     try:
-        browser = init_browser()
-        bot = LinkedInBotFacade.create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, browser=browser, password=password)
+        with init_browser() as browser:
+            # bot = LinkedInBotFacade.create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, browser=browser, password=password)
+            bot = create_bot_and_login(email=email, openai_api_key=openai_api_key, parameters=parameters, browser=browser, password=password)
 
-        job_desc = parameters['job_desc']
-        if job_desc[0]:
-            if job_desc[1]=='linkedin':
-                try:
-                    job_desc_id = job_desc[2].split('/')[-1]
-                    _file_name = f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}.{job_desc_id}.Resume'
-                    pdf64 = bot.apply_component.resume_generator_manager.pdf_base64(job_description_url = job_desc[2], job_description_text = None,
-                                                                html_file_name=os.path.join(bot.jobs_folder, f'{_file_name}.html'), delete_html_file=False)
 
-                    pdf_data = base64.b64decode(pdf64)
+            job_desc = parameters['job_desc']
+            if job_desc[0]:
+                if job_desc[1]=='linkedin':
+                    try:
+                        job_desc_id = job_desc[2].split('/')[-1]
+                        _file_name = f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}.{job_desc_id}.Resume'
+                        pdf64 = bot.apply_component.resume_generator_manager.pdf_base64(job_description_url = job_desc[2], job_description_text = None,
+                                                                    html_file_name=os.path.join(bot.jobs_folder, f'{_file_name}.html'), delete_html_file=False)
 
-                    with open(os.path.join(bot.jobs_folder, f'{_file_name}.pdf'), "xb") as f:
-                        f.write(pdf_data)
-                except Exception as e:
-                    print(f"Exception generating resume from url {job_desc[2]}. Error {e}")
-                    print(f'Traceback {traceback.format_exc()}')
+                        pdf_data = base64.b64decode(pdf64)
 
-        else:
-            bot.start_apply()
+                        with open(os.path.join(bot.jobs_folder, f'{_file_name}.pdf'), "xb") as f:
+                            f.write(pdf_data)
+                    except Exception as e:
+                        print(f"Exception generating resume from url {job_desc[2]}. Error {e}")
+                        print(f'Traceback {traceback.format_exc()}')
+
+            else:
+                bot.start_apply()
     except WebDriverException as e:
         print(f"WebDriver error occurred: {e}")
     except Exception as e:
@@ -172,8 +176,12 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
 
 
 #call browser = init_browser() prior to create_bot
-def create_bot(email, openai_api_key, parameters, password, browser):
+#Note: It has side effects:
+# - directory bot.jobs_folder is created if one doesn't exit
+# - parameters['outputJobsDirectory'] and os.environ["OUTPUT_JOBS_DIRECTORY"] is updated
+def create_bot_and_login(email, openai_api_key, parameters, password, browser):
     bot = LinkedInBotFacade.create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password, browser=browser)
+    bot.do_login()
     os.makedirs(bot.jobs_folder, exist_ok=True)
     parameters['outputJobsDirectory'] = bot.jobs_folder.__str__()
     os.environ["OUTPUT_JOBS_DIRECTORY"] = bot.jobs_folder.__str__()
@@ -389,6 +397,210 @@ def save_job_list(jobs, location):
         print(traceback.format_exc())
 
 
+def get_secrets_from_parameters(param):
+    secrets = param.get('secrets')
+    return secrets.get('email'), secrets.get('password'), secrets.get('api_key')
+
+
+def create_resume_from_lkdn_id(lkdn, parameters):
+    def get_lkdn_file(lkdn, parameters):
+        output_folder = parameters['outputFileDirectory']
+        fn = lkdn
+        if os.path.exists(fn) and os.path.isfile(fn):
+            return fn
+        fn = os.path.join(output_folder, lkdn)
+        if os.path.exists(fn) and os.path.isfile(fn):
+            return fn
+        fn = os.path.join(output_folder, 'Jobs', lkdn)
+        if os.path.exists(fn) and os.path.isfile(fn):
+            return fn
+        fn = os.path.join(output_folder, 'Jobs', parameters.get('name'), lkdn)
+        if os.path.exists(fn) and os.path.isfile(fn):
+            return fn
+
+        return None
+
+    print(f'In create_resume_from_lkdn_id. src={lkdn}')
+    email, password, openai_api_key = get_secrets_from_parameters(parameters)
+    if lkdn is None:
+        printc.printred(f'lkdn paramter is None. Should be either valid linkedin url or id. Aborting')
+        end_time = datetime.datetime.now()
+        printc.printcolor(
+            f'create_resume_from_lkdn_id finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}',
+            "Blue")
+        return (201)
+    urls = []
+    ids = []
+    fn = get_lkdn_file(lkdn, parameters)
+    if is_valid_linkedin_id(lkdn):
+        urls.append(lkdn_url(lkdn))
+        ids.append(lkdn)
+    elif is_valid_linkedin_url(lkdn):
+        urls.append(lkdn)
+        ids.append(get_id_from_linkedin_url(lkdn))
+    elif fn:
+        processed_ids = find_jobs_in_path(os.path.dirname(fn))
+        with open(fn, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if is_valid_linkedin_id(line):
+                    if line not in processed_ids.keys():
+                        urls.append(lkdn_url(line))
+                        ids.append(line)
+                    else:
+                        printc.printyellow(f'Skipping {line}. It has been already processed, dir: {processed_ids.get(line)}')
+                    continue
+                if is_valid_linkedin_url(line):
+                    id = get_id_from_linkedin_url(line)
+                    if id not in processed_ids.keys():
+                        urls.append(line)
+                        ids.append(id)
+                    else:
+                        printc.printyellow(f'Skipping {line}. It has been already processed, dir: {processed_ids.get(line)}')
+    else:
+        printc.printred(
+            f'Unknown lkdn format. Expected linkedin job ID, job url, or a file. Received: {lkdn}. Aborting')
+        return (400)
+    print(f'{len(ids)} jobs are ready to process. {ids} ')
+    with init_browser() as browser:
+        bot = create_bot_and_login(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
+                                   browser=browser)
+        # login is done in the create_bot
+        # bot.do_login()
+
+        for url in urls:
+            try:
+                bot.generate_resume_from_url(url)
+            except Exception as e:
+                printc.printred(f"Failed to create a resume from id: {line}")
+        # finally:
+        #    browser.close()
+        #    browser.quit()
+
+    return 0
+
+
+def create_resume_from_local_data(jobs, parameters):
+    exit_code = 0
+    email, password, openai_api_key = get_secrets_from_parameters(parameters)
+    try:
+        path_jobs = jobs
+        if path_jobs is None:
+            printc.printred(f'Path to the folder with downloaded data is required')
+            return (3)
+
+        matching_files = []
+        bot = create_bot_and_login(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
+                                   browser=None)
+
+        # Walk through the file system starting from the given path
+        # (os.path.dirname(__file__), path_jobs)
+        for root, dirs, files in os.walk(path_jobs):
+            try:
+                for file in files:
+                    if file.endswith('.pdf'):
+                        raise FileExistsError(f'PDF exists in a folder {root}')  # already processed, skipping
+                for file in files:
+                    if file == 'job.json':
+                        # Append the full path of the matching file
+                        json_path = os.path.join(root, file)
+                        # load json
+
+                        with open(json_path, 'r', encoding='utf-8') as json_file:
+                            data = json.load(json_file, object_hook=custom_job_deserializer)
+                            if data is not None:
+                                job = Job(**data)
+                                if job is not None:
+                                    bot.generate_resume_from_job(job, path=root)
+                                else:
+                                    raise ValueError(f'Unable to create job from dict {data}')
+                            else:
+                                raise json.JSONDecodeError('Failed to deserialize json data')
+
+            except FileExistsError as e:
+                print(f"{e}")
+            except json.JSONDecodeError as e:
+                print(f"Error decoding JSON in file {json_path}: {e}")
+            except ValueError as e:
+                print(f'ValueError while creating a job from dict {data}')
+            except Exception as e:
+                print(f"Error reading file {json_path}: {e}")
+    except Exception as e:
+        print(f'Exception in create resume from job. Error:{e}')
+        print(f'Traceback: {traceback.format_exc()}')
+        return (10)
+
+    return (0)
+
+
+def search_lkdn(jobs, parameters):
+    print(f'In search_lkdn')
+    exit_code = 0
+    email, password, openai_api_key = get_secrets_from_parameters(parameters)
+    with init_browser() as browser:
+        bot = create_bot_and_login(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
+                                   browser=browser)
+        # login is done in the create_bot
+        # bot.do_login()
+
+        searches = bot.apply_component.get_searches()
+        print(f'starting {len(searches)} searches')
+        no_expected = 0
+        job_list = []
+        for position, location in searches:
+            nn = 0
+            jobs = bot.apply_component.get_jobs_from_search(position=position, location=location, no_expected=nn)
+            if jobs is not None and len(jobs) > 0:
+                job_list += jobs
+                no_expected += nn
+
+                # ToDo write code to save jobs as json file
+                try:
+                    jobs_ = []
+                    if os.path.exists(os.path.join(jobs[0].base_path, 'job_list.json')):
+                        # read existing json
+                        with open(os.path.join(jobs[0].base_path, 'job_list.json'), 'r', encoding='utf-8') as f:
+                            j = f.read()
+                            jobs_ = [Job(**x) for x in json.loads(j)]
+
+                    jobs_ += jobs
+                    # save list of jobs to json file
+                    with open(os.path.join(jobs[0].base_path, 'job_list.json'), 'w', encoding='utf-8') as f:
+                        f.write(json.dumps(jobs_, default=custom_job_deserializer()))
+                except Exception as e:
+                    printc.printred(f'Exception while saving list of jobs. Error: {e}')
+
+                # save jobs to csv
+                try:
+                    header = ''
+                    base_path_csv = os.path.dirname(jobs[0].base_path)
+                    file_path = os.path.join(base_path_csv, 'job_list.csv')
+                    print(f'Saving csv for {len(jobs)} jobs to file: {file_path}')
+                    if not os.path.exists(file_path):  # file doesn't exist. Creating header
+                        # writing header
+                        with open(file_path, 'a', newline='') as file:
+                            writer = csv.writer(file)
+                            writer.writerow(dataclass_to_field_names(jobs[0]))
+
+                    for job in jobs:
+                        try:
+                            new_row = dataclass_to_list(job)
+                            with open(file_path, 'a', newline='') as file:
+                                writer = csv.writer(file)
+                                writer.writerow(new_row)
+                            # Write the new row to the file
+                            # print(f"Added line {','.join(new_row)}")
+                        except Exception as e:
+                            print(f'Exception while saving csv: {e}')
+                except:
+                    pass
+                # save_job_list(jobs, location)
+                print(f'Expected: {nn} jobs. Retrieved {len(jobs)} jobs from {location} for {position}')
+
+        print(f'Expected: {no_expected} jobs. Retrieved {len(job_list)} jobs from {len(searches)} searches')
+    # bot.generate_job_list_from_search(search_param)
+    return exit_code, jobs
+
 @click.command()
 #@click.option('--resume', type=click.Path(exists=False, file_okay=True, dir_okay=False, path_type=Path), help="Path to the resume PDF file")
 @click.option('--resume', type=str, default=None, help="Path to the resume PDF file")
@@ -410,12 +622,12 @@ def save_job_list(jobs, location):
 @click.option('--easy_apply', is_flag=True, help='If shall continue to fill in easy_apply')
 #mode -search_apply
 #mode -convert
-#mode -resume_lkdin
+#mode -resume_lkdn
 #mode -apply_txt
 #mode -apply_url
-#mode -search_lkdin
+#mode -search_lkdn
 #mode -create_local
-@click.option('--mode', type=click.Choice(['search_apply', 'convert', 'resume_lkdin', 'apply_txt', 'apply_url', 'search_lkdin', 'create_local']), default='search_apply', help='Mode of operation choose one of - search and apply(default), convert html to pdf and text, apply one that is provide')
+@click.option('--mode', type=click.Choice(['search_apply', 'convert', 'resume_lkdn', 'apply_txt', 'apply_url', 'search_lkdn', 'create_local']), default='search_apply', help='Mode of operation choose one of - search and apply(default), convert html to pdf and text, apply one that is provide')
 def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_template,
          lkdn, job_url, linkedin_id, job_file_desc, llm_cheap, llm, src_html, easy_apply, mode):
 
@@ -431,7 +643,7 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
     config_file=None
     plain_text_resume_file=None
     output_folder=None
-
+    parameters = None
     try:
         data_folder = Path(data_folder)
         config_dict = {
@@ -446,6 +658,12 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
 
         parameters = ConfigValidator.validate_config(config_file)
         email, password, openai_api_key = ConfigValidator.validate_secrets(secrets_file)
+        secrets = {
+            'email':email,
+            'password':password,
+            'api_key':openai_api_key
+        }
+        parameters['secrets']=secrets
 
         parameters['uploads'] = FileManager.file_paths_to_dict(resume, plain_text_resume_file)
         parameters['outputFileDirectory'] = output_folder.__str__()
@@ -475,178 +693,17 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
         convert_(clickParam)
         exit_(0, start_time)
 
-    if mode=='resume_lkdin':
-        print(f'In apply_lkdin. src={lkdn}')
-        if lkdn is None: 
-            printc.printred(f'lkdn paramter is None. Should be either valid linkedin url or id. Aborting')
-            end_time = datetime.datetime.now()
-            printc.printcolor(
-                f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time - start_time}',
-                "Blue")
-            exit_(201, start_time)
-
-        urls = []
-        ids = []
-        if is_valid_linkedin_id(lkdn):
-            urls.append(lkdn_url(lkdn))
-            ids.append(lkdn)
-        elif is_valid_linkedin_url(lkdn):
-            urls.append(lkdn)
-            ids.append(get_id_from_linkedin_url(lkdn))
-        elif os.path.exists(lkdn) and os.path.isfile(lkdn):
-            processed_ids = find_jobs_in_path(output_folder)
-            with open(lkdn, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if is_valid_linkedin_id(line):
-                        if line not in processed_ids:
-                            urls.append(lkdn_url(line))
-                        else:
-                            printc.printyellow(f'{line} has been already processed, skipping')
-                    if is_valid_linkedin_url(line):
-                        id = get_id_from_linkedin_url(line)
-                        if id not in processed_ids:
-                            urls.append(line)
-                            ids.append(id)
-                        else:
-                            printc.printyellow(f'{line} has been already processed, skipping')
-        else:
-            printc.printred(f'Unknown lkdn format. Expected linkedin job ID, job url, or a file. Received: {lkdn}. Aborting')
-            exit_(code=400, start_time=start_time)
-        
-        print(f'{len(ids)} jobs are ready to process. {ids} ')
-        with init_browser() as browser:
-            bot = create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
-                             browser=browser)
-            bot.do_login()
-
-            for url in urls:
-                try:
-                    bot.generate_resume_from_url(url)
-                except Exception as e:
-                    printc.printred(f"Failed to create a resume from id: {line}")
-            #finally:
-            #    browser.close()
-            #    browser.quit()
-
+    if mode=='resume_lkdn':
+        code = create_resume_from_lkdn_id(lkdn=lkdn, parameters=parameters)
         exit_(0, start_time)
 
-    if mode=='search_lkdin':
-        exit_code=0
-
-        browser = init_browser()
-        bot = create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
-                         browser=browser)
-        bot.do_login()
-
-        searches = bot.apply_component.get_searches()
-        print(f'starting {len(searches)} searches')
-        no_expected = 0
-        job_list= []
-        for position, location in searches:
-            nn = 0
-            jobs = bot.apply_component.get_jobs_from_search(position=position, location=location, no_expected=nn)
-            if jobs is not None and len(jobs)>0:
-                job_list+=jobs
-                no_expected+=nn
-
-                #ToDo write code to save jobs as json file
-                try:
-                    jobs_ = []
-                    if os.path.exists(os.path.join(jobs[0].base_path, 'job_list.json')):
-                        #read existing json
-                        with open(os.path.join(jobs[0].base_path, 'job_list.json'),'r', encoding='utf-8') as f:
-                            j = f.read()
-                            jobs_ = [Job(**x) for x in json.loads(j)]
-
-                    jobs_ += jobs
-                    #save list of jobs to json file
-                    with open(os.path.join(jobs[0].base_path, 'job_list.json'), 'w', encoding='utf-8') as f:
-                        f.write(json.dumps(jobs_, default=custom_job_deserializer()))
-                except Exception as e:
-                    printc.printred(f'Exception while saving list of jobs. Error: {e}')
-
-                #save jobs to csv
-                try:
-                    header = ''
-                    base_path_csv = os.path.dirname(jobs[0].base_path)
-                    file_path = os.path.join(base_path_csv, 'job_list.csv')
-                    print(f'Saving csv for {len(jobs)} jobs to file: {file_path}')
-                    if not os.path.exists(file_path): #file doesn't exist. Creating header
-                        # writing header
-                        with open(file_path, 'a', newline='') as file:
-                            writer = csv.writer(file)
-                            writer.writerow(dataclass_to_field_names(jobs[0]))
-
-                    for job in jobs:
-                        try:
-                           new_row = dataclass_to_list(job)
-                           with open(file_path, 'a', newline='') as file:
-                               writer = csv.writer(file)
-                               writer.writerow(new_row)
-                             # Write the new row to the file
-                               #print(f"Added line {','.join(new_row)}")
-                        except Exception as e:
-                            print(f'Exception while saving csv: {e}')
-                except:
-                    pass
-                #save_job_list(jobs, location)
-                print(f'Expected: {nn} jobs. Retrieved {len(jobs)} jobs from {location} for {position}')
-
-        print(f'Expected: {no_expected} jobs. Retrieved {len(job_list)} jobs from {len(searches)} searches')
-
-
-        #bot.generate_job_list_from_search(search_param)
-
+    if mode=='search_lkdn':
+        exit_code, _ = search_lkdn(jobs, parameters)
         exit_(exit_code, start_time)
 
     if mode=='create_local':
-        try:
-            path_jobs = jobs
-            if path_jobs is None:
-                printc.printred(f'Path to the folder with downloaded data is required')
-                exit_(3)
-
-            matching_files = []
-            bot = create_bot(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
-                             browser=None)
-
-                # Walk through the file system starting from the given path
-            #(os.path.dirname(__file__), path_jobs)
-            for root, dirs, files in os.walk(path_jobs):
-                try:
-                    for file in files:
-                        if file.endswith('.pdf'):
-                            raise FileExistsError(f'PDF exists in a folder {root}')#already processed, skipping
-                    for file in files:
-                        if file=='job.json':
-                            # Append the full path of the matching file
-                            json_path = os.path.join(root, file)
-                            #load json
-
-                            with open(json_path, 'r', encoding='utf-8') as json_file:
-                                data = json.load(json_file, object_hook=custom_job_deserializer)
-                                if data is  not None:
-                                    job = Job(**data)
-                                    if job is not None:
-                                        bot.generate_resume_from_job(job, path=root)
-                                    else:
-                                        raise ValueError(f'Unable to create job from dict {data}')
-                                else:
-                                    raise json.JSONDecodeError('Failed to deserialize json data')
-
-                except FileExistsError as e:
-                    print(f"{e}")
-                except json.JSONDecodeError as e:
-                    print(f"Error decoding JSON in file {json_path}: {e}")
-                except Exception as e:
-                    print(f"Error reading file {json_path}: {e}")
-        except Exception as e:
-            print(f'Exception in create resume from job. Error:{e}')
-            print(f'Traceback: {traceback.format_exc()}')
-            exit(10)
-
-        exit_(0, start_time=start_time)
+        code = create_resume_from_local_data(jobs, parameters)
+        exit_(code, start_time=start_time)
     #scan and apply
     try:
         # only one (or none) of the job options are allowed. If more than one is specified, only the first valid one is used
@@ -684,6 +741,7 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
 
     end_time = datetime.datetime.now()
     printc.printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time-start_time}', "Blue")
+
 
 
 if __name__ == "__main__":

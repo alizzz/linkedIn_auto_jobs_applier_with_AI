@@ -235,6 +235,7 @@ class LinkedInBotFacade:
         job = self.apply_component.load_job_from_url(url)
         fn_job_desc = f'job.desc.{make_valid_path(job.apply_method)}.{job.is_relevant_str}.txt'
         fn_job_json = f'job.{job.id}.json'
+        self.apply_component.gpt_answerer.is_relevant_job(job)
         out_path = job.path
 
         self.generate_resume_from_job(job, relevant_only, is_linkedin)
@@ -250,7 +251,7 @@ class LinkedInBotFacade:
             f.write('\n**************  JOB DESCRIPTION RAW  **************************\n')
             f.write(job.description)
 
-        with open(os.path.join(out_path, fn_job_json, encoding='utf-8'), 'w') as f:
+        with open(os.path.join(out_path, fn_job_json), 'w', encoding='utf-8') as f:
             json.dump(job.json, f)
         print(f'Finished generating resume for {job.fname } from url {url}')
 
