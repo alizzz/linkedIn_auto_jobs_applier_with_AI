@@ -238,21 +238,37 @@ class LinkedInBotFacade:
         self.apply_component.gpt_answerer.is_relevant_job(job)
         out_path = job.path
 
-        self.generate_resume_from_job(job, relevant_only, is_linkedin)
-
-
+        try:
+            self.generate_resume_from_job(job, relevant_only, is_linkedin)
+        except Exception as e:
+            print(
+                f'Failed generate_resume_from_job {job.id}: for {job.fname}. LinkedInBotFacade::generate_resume_from_url() Error:{e}')
+            raise e
 
         os.makedirs(out_path, exist_ok=True)
-        #if not (os.path.exists(os.path.join(out_path, fn_job_desc))):
-        with open(os.path.join(out_path, fn_job_desc), 'w', encoding='utf-8') as f:
-            f.write('\n**************  JOB DESCRIPTION SUMMARY  **********************\n')
-            f.write(job.job_description_summary)
-            f.write('\n***************************************************************\n')
-            f.write('\n**************  JOB DESCRIPTION RAW  **************************\n')
-            f.write(job.description)
+        try:
+            #if not (os.path.exists(os.path.join(out_path, fn_job_desc))):
+            with open(os.path.join(out_path, fn_job_desc), 'w', encoding='utf-8') as f:
+                f.write('\n**************  JOB DESCRIPTION SUMMARY  **********************\n')
+                f.write(job.job_description_summary)
+                f.write('\n***************************************************************\n')
+                f.write('\n**************  JOB DESCRIPTION RAW  **************************\n')
+                f.write(job.description)
+        except Exception as e:
+            print(f'Failed writing job description for job {job.id}: for {job.fname}. LinkedInBotFacade::generate_resume_from_url()')
+        try:
+            #write job json
+            with open(os.path.join(out_path, fn_job_json), 'w', encoding='utf-8') as f:
+                json.dump(job.json, f)
+        except Exception as e:
+            print(f'Failed writing json for job {job.id}: for {job.fname}. LinkedInBotFacade::generate_resume_from_url()')
 
-        with open(os.path.join(out_path, fn_job_json), 'w', encoding='utf-8') as f:
-            json.dump(job.json, f)
+        try:
+            #write internet shortcut
+            with open(os.path.join(out_path, f'job.link.{job.id}.url'), 'w', encoding='utf-8') as f:
+                    f.write(f"[InternetShortcut]\nURL={job.link}\n")
+        except:
+            print(f'Failed writing internet shortcut for job {job.id}: for {job.fname}. LinkedInBotFacade::generate_resume_from_url()')
         print(f'Finished generating resume for {job.fname } from url {url}')
 
     def _generate_resume(self, url=None, text=None, file_name_out=None, path=None):
@@ -276,6 +292,7 @@ class LinkedInBotFacade:
                     k+=1
                     fn = os.path.join(output_folder, f'{file_name_out}.{k:03}.pdf')
             with open(fn, "xb") as f: f.write(pdf_data)
+
         except Exception as e:
             print(f"Exception generating resume from url {url}. Error {e}")
             print(f'Traceback {traceback.format_exc()}')

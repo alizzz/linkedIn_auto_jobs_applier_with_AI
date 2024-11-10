@@ -25,6 +25,8 @@ from src.linkedIn_bot_facade import LinkedInBotFacade
 from src.file_manager import FileManager
 from src.config import linkedin_url_fmt
 from lib_resume_builder_AIHawk.utils import HTML_to_PDF
+from lib_resume_builder_AIHawk.gpt_resumer_base import LLMResumerBase
+from lib_resume_builder_AIHawk.gpt_cover_job_description import LLMCoverJobDescription
 
 import context
 
@@ -335,8 +337,9 @@ def convert_(clickParam:ClickParam ):
 
 def exit_(code:int=0, start_time:datetime.datetime=None, color:str='Blue'):
     exec_time = ''
-    if start_time is not None: 
-        end_time = datetime.datetime.now()
+    end_time = datetime.datetime.now()
+
+    if start_time is not None:
         exec_time = f' Execution time {end_time - start_time}'
     
     printc.printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. {exec_time}',color)
@@ -440,6 +443,7 @@ def create_resume_from_lkdn_id(lkdn, parameters):
         ids.append(get_id_from_linkedin_url(lkdn))
     elif fn:
         processed_ids = find_jobs_in_path(os.path.dirname(fn))
+        output_lines =[]
         with open(fn, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
@@ -447,20 +451,31 @@ def create_resume_from_lkdn_id(lkdn, parameters):
                     if line not in processed_ids.keys():
                         urls.append(lkdn_url(line))
                         ids.append(line)
+                        output_lines.append(line)
                     else:
+                        output_lines.append(f'{line} - {processed_ids.get(line)}')
                         printc.printyellow(f'Skipping {line}. It has been already processed, dir: {processed_ids.get(line)}')
                     continue
-                if is_valid_linkedin_url(line):
-                    id = get_id_from_linkedin_url(line)
-                    if id not in processed_ids.keys():
-                        urls.append(line)
-                        ids.append(id)
-                    else:
-                        printc.printyellow(f'Skipping {line}. It has been already processed, dir: {processed_ids.get(line)}')
+                #if lines are urls - do not use it for now
+                #if is_valid_linkedin_url(line):
+                #    id = get_id_from_linkedin_url(line)
+                #    if id not in processed_ids.keys():
+                #        urls.append(line)
+                #        ids.append(id)
+                #    else:
+                #        printc.printyellow(f'Skipping {line}. It has been already processed, dir: {processed_ids.get(line)}')
+                else:
+                    #the line is not a valid linkedin id, just copy it to the output
+                    output_lines.append(line)
     else:
         printc.printred(
             f'Unknown lkdn format. Expected linkedin job ID, job url, or a file. Received: {lkdn}. Aborting')
         return (400)
+
+    with open(fn, 'w', encoding='utf-8') as f:
+        lines = list(dict.fromkeys(output_lines))
+        f.writelines(lines)
+
     print(f'{len(ids)} jobs are ready to process. {ids} ')
     with init_browser() as browser:
         bot = create_bot_and_login(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
@@ -695,7 +710,9 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
 
     if mode=='resume_lkdn':
         code = create_resume_from_lkdn_id(lkdn=lkdn, parameters=parameters)
-        exit_(0, start_time)
+        _, _,openai_api_key = get_secrets_from_parameters(parameters)
+        cover = LLMCoverJobDescription(openai_api_key=openai_api_key)
+        exit_(code, start_time)
 
     if mode=='search_lkdn':
         exit_code, _ = search_lkdn(jobs, parameters)

@@ -1,3 +1,4 @@
+import copy
 import datetime
 import os
 import random
@@ -48,7 +49,7 @@ def find_element_with_wait(driver, by:By, value:str, timeout=5, post_sleep=(1.0,
             time.sleep(random.uniform(*post_sleep))
         return element
     except Exception as e:
-        print(f"Element not found: {value}. Error: {e}")
+        print(f"Element not found: {value}")
         return None
 
 def find_elements_with_wait(driver, by:By, value:str, timeout=5, post_sleep=(1.0, 2.5) ):
@@ -501,12 +502,21 @@ class LinkedInJobManager:
         except Exception as e:
             pass
         try:
-            html = self.driver.find_element(By.ID, "job-details").get_attribute('innerHTML')
-            #remove html tags
-            clean_tags = re.compile('<.*?>')
-            jd_ = re.sub(clean_tags, '', html)
-            #remove extra \n and white space
-            job.description = re.sub(r'\s+', ' ', jd_).strip()
+            use_text=True #for some reason I used html. It removes delimiters ('.', .\n\n' etc) the way it is implemented here.
+            if use_text:
+                elm_job_desc = find_element_with_wait(driver=self.driver, by=By.ID, value="job-details", post_sleep=(0,0.1))
+                if elm_job_desc:
+                    txt = elm_job_desc.text
+                    # Replace any remaining multiple "\n" with "\n\n"
+                    text = re.sub(r'\n{3,}', '\n\n', txt)
+                    job.description = text
+            else:
+                html = self.driver.find_element(By.ID, "job-details").get_attribute('innerHTML')
+                #remove html tags
+                clean_tags = re.compile('<.*?>')
+                jd_ = re.sub(clean_tags, '', html)
+                #remove extra \n and white space
+                job.description = re.sub(r'\s+', ' ', jd_).strip()
         except Exception as e:
             printc.printred(f'Error while extracting job description. Error {e}')
         try:

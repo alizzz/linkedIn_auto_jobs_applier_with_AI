@@ -113,11 +113,6 @@ class Job:
     _created:datetime.datetime=None
     _description_added:datetime.datetime=None
     _resume_added:datetime.datetime=None
-
-    #base_path: str = ''
-    #pdf_file: str = ""
-    #html_file: str = ""
-    #job_file: str = ""
     resume: DocSet = None
     job_docset: DocSet = None
     cover: DocSet = None
@@ -127,6 +122,47 @@ class Job:
         return json.dumps(asdict(self), default=custom_job_serializer)
 
     #example use: job=Job.deserialize(Job, json_str, job_custom_deserializer)
+
+    @staticmethod
+    def from_json_file(fn, mapping=None):
+        if not (os.path.exists(fn) and os.path.isfile(fn)):
+            raise FileNotFoundError()
+
+        #since json file has been created manually need to map it back to job field names
+        key_mapping={
+            "job_id": "id",
+            "job_title": "title",
+            "company_name": "company",
+            "job_location": "location",
+            "office_policy": "_office_policy",
+            "job_compensation": "compensation",
+            "is_relevant": "is_relevant_str",
+            "relevant_confidence": "is_relevant_confidence",
+            "applied": "is_applied",
+            "easy_apply": "is_easyApply",
+            "link": "link",
+            "job_recruiter": "recruiter_link",
+            "blacklisted": "_blacklisted"
+        }
+
+        dict1 = {}
+        dict2 = {}
+        with open(fn, 'r', encoding='utf-8') as f:
+            dict1 = json.load(f)
+            if not dict1: raise ValueError()
+
+        for key1, key2 in key_mapping.items():
+            if key1 in dict1:
+                dict2[key2]=dict1[key1]
+
+        j = Job(**dict2)
+        if dict1["job_desc_file"]:
+            j.job_docset=DocSet(docset_name='job', _file_name=os.path.splitext(dict1["job_desc_file"])[0])
+
+        if dict1["resume_pdf"]:
+            j.job_docset = DocSet(docset_name='resume', _file_name=os.path.splitext(dict1["resume_pdf"])[0])
+
+        return j
 
     def deserialize(self, data: str):
         if is_valid_non_empty_string(data):
@@ -310,6 +346,7 @@ class Job:
         return 'relevant' if self.is_relevant else 'not_relevant'
     @property
     def is_relevant(self) ->bool:
+        if isinstance(self.relevancy, bool): return self.relevancy
         rel = False
         if self.relevancy is not None:
             rel = self.relevancy.lower() in ['y','yes', '1', 'on', 't','true']

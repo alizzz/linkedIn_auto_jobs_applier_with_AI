@@ -333,7 +333,7 @@ class printc:
         print(f"{YELLOW}{text}{RESET}")
 
 def get_state_from_loc(loc, pattern = r",?\s([A-Z]{2})$|,\s([A-Za-z\s]+)$", valid_path = True):
-    if loc is None: return 'None'
+    if loc is None or len(loc)==0: return 'None'
     try:
         match = re.search(pattern, loc)
         if match:
