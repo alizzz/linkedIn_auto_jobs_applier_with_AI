@@ -12,7 +12,9 @@ from typing import Type, TypeVar
 from dataclasses import dataclass, asdict, is_dataclass
 from lib_resume_builder_AIHawk.utils import HTML_to_PDF
 
+
 chromeProfilePath = os.path.join(os.getcwd(), "chrome_profile", "linkedin_profile")
+
 
 def get_id_from_linkedin_url(url, pattern = r'linkedin\.com/.+?/(\d+)/'):
     if not is_valid_non_empty_string(url): return None

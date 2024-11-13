@@ -89,6 +89,10 @@ class LoggerChatModel:
         LLMLogger.log_request(prompts=messages, parsed_reply=parsed_reply)
         return reply
 
+    def with_structured_output(self,schema=None):
+        if schema:
+            self.llm.with_structured_output(schema=schema)
+
     def parse_llmresult(self, llmresult: AIMessage) -> Dict[str, Dict]:
         # Parse the LLM result into a structured format.
         content = llmresult.content
@@ -192,7 +196,11 @@ class GPTAnswerer:
             prompt_sanitize_template = self._preprocess_template_string(prompt_is_relevant)
             prompt = ChatPromptTemplate.from_template(prompt_sanitize_template)
             chain = prompt | self.llm_cheap | StrOutputParser()
-            output = chain.invoke({"relevance_criteria": relevance_criteria, "job_desc": job_desc})
+
+            # ToDo Removed while testing. Restore when testing is finished
+            #output = chain.invoke({"relevance_criteria": relevance_criteria, "job_desc": job_desc})
+            output = """{ "relevant": "Yes", "confidence": 0.95, "industry": "Technology", "job family": "AI/ML Engineering and Product Development" }"""
+
             j = json.loads(output, strict=False)
             job.relevancy=j["relevant"]
             job.is_relevant_confidence = j['confidence']
@@ -368,7 +376,7 @@ class GPTAnswerer:
         func_template = self._preprocess_template_string(strings.numeric_question_template)
         prompt = ChatPromptTemplate.from_template(func_template)
         chain = prompt | self.llm_cheap | StrOutputParser()
-        output_str = chain.invoke({"resume_educations": self.resume.education_details,"resume_jobs": self.resume.experience_details,"resume_projects": self.resume.projects , "question": question})
+        output_str = chain.invoke({"resume_educations": self.resume.education_details,"resume_jobs": self.resume.work_experiences, "resume_projects": self.resume.projects , "question": question})
         try:
             output = self.extract_number_from_string(output_str)
         except ValueError:

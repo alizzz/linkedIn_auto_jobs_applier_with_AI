@@ -138,14 +138,14 @@ class LinkedInBotFacade:
                     with open(file, 'r') as f:
                         text = f.read()
                         _file_name = f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}.Resume.frm_file'
-                        self._generate_resume(url=None, text=text, file_name_out=_file_name)
+                        self._generate_resume(url=None, text=text, job_title=None, file_name_out=_file_name)
                 else:
                     print(f"WARNING: File doesn't exist. In generate_resume_from_src reading from file {file}")
             except Exception as e:
                 print(f'Exception: In generate_resume_from_src reading from file {file} Error {e}')
         elif text is not None:
             _file_name = f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}.Resume.frm_txt'
-            self._generate_resume(url=None, text=text, file_name_out=_file_name)
+            self._generate_resume(url=None, text=text, job_title=None, file_name_out=_file_name)
 
 
     def get_resume_fn(self, pi:PersonalInformation, param=None):
@@ -214,15 +214,16 @@ class LinkedInBotFacade:
                 f'Relevant_only is {relevant_only} and job relevancy is {job.is_relevant_str}. Skipping resume generation for jobid={job.id}')
         else:
             if is_valid_non_empty_string(job.description) and not is_valid_non_empty_string(job.job_description_summary):
-                jd_summary = self.apply_component.gpt_answerer.summarize_job_description(job.description)
-                job.set_job_description_summary(jd_summary)
+                #ToDo commented during debugging to speed things up. Uncomment later
+                #jd_summary = self.apply_component.gpt_answerer.summarize_job_description(job.description)
+                job.set_job_description_summary("***SUMMARY***")
 
             desc = '\n'.join([job.job_description_summary if is_valid_non_empty_string(job.job_description_summary) else '',
                               job.description if is_valid_non_empty_string(job.description) else ''])
             if len(desc)<50:
                 raise ValueError(f'In generate_resume_from_job(). Job object does not contain valid job description. job-description: {job.description}. Job-description_summary: {job.job_description_summary}')
 
-            self._generate_resume(url=None, text=desc, file_name_out=fn_resume, path=out_path)
+            self._generate_resume(url=None, text=desc, job_title=job.title, file_name_out=fn_resume, path=out_path)
 
 
     #This method has a few side effects
@@ -271,13 +272,21 @@ class LinkedInBotFacade:
             print(f'Failed writing internet shortcut for job {job.id}: for {job.fname}. LinkedInBotFacade::generate_resume_from_url()')
         print(f'Finished generating resume for {job.fname } from url {url}')
 
-    def _generate_resume(self, url=None, text=None, file_name_out=None, path=None):
+    def _generate_resume(self, url:str=None, text:str=None, job_title:str = None, file_name_out=None, path=None):
         try:
             output_folder = os.environ.get('OUTPUT_JOBS_DIRECTORY') if path is None else path
             if not os.path.exists(output_folder):
                 os.makedirs(output_folder, exist_ok=True)
+
+            #html_resume =  self.apply_component.resume_generator_manager.create_html_resume(job,
+            #                                                                        html_file_name=os.path.join(output_folder, f'{file_name_out}.html'),
+            #                                                                        delete_html_file=False)
+
+           #pdf64 = pdf_base64(html, html_file_name=os.path.join(output_folder,f'{file_name_out}.html'))
+
             pdf64 = self.apply_component.resume_generator_manager.pdf_base64(job_description_url=url,
                                                                              job_description_text=text,
+                                                                             job_title=job_title,
                                                                              html_file_name=os.path.join(output_folder,
                                                                                                          f'{file_name_out}.html'),
                                                                              delete_html_file=False)

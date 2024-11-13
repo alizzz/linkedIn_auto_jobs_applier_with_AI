@@ -27,8 +27,10 @@ from src.config import linkedin_url_fmt
 from lib_resume_builder_AIHawk.utils import HTML_to_PDF
 from lib_resume_builder_AIHawk.gpt_resumer_base import LLMResumerBase
 from lib_resume_builder_AIHawk.gpt_cover_job_description import LLMCoverJobDescription
-
+from lib_resume_builder_AIHawk.resume_html import HtmlResume
+from lib_resume_builder_AIHawk.resume import Resume
 import context
+
 
 # Suppress stderr
 sys.stderr = open(os.devnull, 'w')
@@ -472,11 +474,18 @@ def create_resume_from_lkdn_id(lkdn, parameters):
             f'Unknown lkdn format. Expected linkedin job ID, job url, or a file. Received: {lkdn}. Aborting')
         return (400)
 
-    with open(fn, 'w', encoding='utf-8') as f:
-        lines = list(dict.fromkeys(output_lines))
-        f.writelines(lines)
+    if False:
+        with open(fn, 'w', encoding='utf-8') as f:
+            lines = list(dict.fromkeys(output_lines))
+            lines = [line + "\n" for line in lines]  # Add '\n' to each line
+            f.writelines(lines)
 
+    ids.append('4069063289')
+    urls.append(lkdn_url('4069063289'))
     print(f'{len(ids)} jobs are ready to process. {ids} ')
+    if len(ids)==0:
+        return 0
+
     with init_browser() as browser:
         bot = create_bot_and_login(email=email, openai_api_key=openai_api_key, parameters=parameters, password=password,
                                    browser=browser)
@@ -703,6 +712,8 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
         exit_(100, start_time)
     # </editor-fold>
 
+
+
     #convert
     if mode=='convert':
         convert_(clickParam)
@@ -760,8 +771,47 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
     printc.printcolor(f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time-start_time}', "Blue")
 
 
+def generate_html_resume( rfn_in = 'plain_text_resume_al_anc_hypc.yaml',
+                          cssfn = r'C:\Users\al\PycharmProjects\lib_resume_builder_AIHawk\lib_resume_builder_AIHawk\resume_style\style_hawk_al_blue.css',
+                          rfn_out = None,
+                          rfn_in_path = r"C:\Users\al\PycharmProjects\linkedIn_auto_jobs_applier_with_AI\data_folder",
+                          rfn_out_path = r"C:\Users\al\PycharmProjects\linkedIn_auto_jobs_applier_with_AI\data_folder\output"
+
+):
+    if not rfn_out:
+        rfn_split = os.path.splitext(rfn_in)
+        rfn_out = f'{rfn_split[0]}.out.html'
+    if rfn_in_path:
+        rfn_in = os.path.join(rfn_in_path, rfn_in)
+    if rfn_out_path:
+        rfn_out = os.path.join(rfn_out_path, rfn_out)
+
+
+    html = ''
+    ry = ''
+    with open(rfn_in, 'r', encoding='utf-8') as f:
+        ry = f.read()
+    #    css = ''
+    #    with open(cssfn, 'r', encoding='utf-8') as f:
+    #        css = f.read()
+    try:
+        r = Resume(ry)
+        hr = HtmlResume(r, css=cssfn)
+        html = hr.html()
+        with open(rfn_out, 'w', encoding='utf-8') as f:
+            f.write(html)
+        print(f'finished generating html resume from {rfn_in.split('\\')[-1]}')
+
+    except Exception as e:
+        print(e)
+
+    return html
+
 
 if __name__ == "__main__":
+    #generate_html_resume()
+    #exit(0)
+
     #job = Job()
     #s = dataclass_to_field_names(job)
     #print(s)

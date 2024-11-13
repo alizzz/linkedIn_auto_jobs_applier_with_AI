@@ -26,6 +26,9 @@ from lib_resume_builder_AIHawk.config import global_config
 from CustomExceptions import NotRelevantError, NoJobsOnPageError, AlreadyRetrievedError, OutOfPolicyError
 from urllib.parse import quote
 
+from lib_resume_builder_AIHawk.resume import Resume
+from lib_resume_builder_AIHawk.resume_html import HtmlResume
+
 load_dotenv()
 
 

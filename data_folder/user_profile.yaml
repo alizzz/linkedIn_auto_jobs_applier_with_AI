@@ -9,5 +9,5 @@ jobs_dir: jobs
 resume_template:
 
 environment:
-  RESUME_TEMPLATE: al_resume_template.html
+  RESUME_TEMPLATE: al_resume_body_template.html
   SKIP_APPLY: False

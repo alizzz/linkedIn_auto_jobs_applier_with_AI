@@ -607,3 +607,4 @@ class Job:
         {self.description or 'No description provided.'}
         """
         return job_information.strip()
+
