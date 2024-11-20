@@ -27,7 +27,7 @@ from CustomExceptions import NotRelevantError, NoJobsOnPageError, AlreadyRetriev
 from urllib.parse import quote
 
 from lib_resume_builder_AIHawk.resume import Resume
-from lib_resume_builder_AIHawk.resume_html import HtmlResume
+from lib_resume_builder_AIHawk.html_resume import HtmlResume
 
 load_dotenv()
 

@@ -27,7 +27,7 @@ from src.config import linkedin_url_fmt
 from lib_resume_builder_AIHawk.utils import HTML_to_PDF
 from lib_resume_builder_AIHawk.gpt_resumer_base import LLMResumerBase
 from lib_resume_builder_AIHawk.gpt_cover_job_description import LLMCoverJobDescription
-from lib_resume_builder_AIHawk.resume_html import HtmlResume
+from lib_resume_builder_AIHawk.html_resume import HtmlResume
 from lib_resume_builder_AIHawk.resume import Resume
 import context
 
@@ -474,14 +474,14 @@ def create_resume_from_lkdn_id(lkdn, parameters):
             f'Unknown lkdn format. Expected linkedin job ID, job url, or a file. Received: {lkdn}. Aborting')
         return (400)
 
-    if False:
+    if True:
         with open(fn, 'w', encoding='utf-8') as f:
             lines = list(dict.fromkeys(output_lines))
             lines = [line + "\n" for line in lines]  # Add '\n' to each line
             f.writelines(lines)
 
-    ids.append('4069063289')
-    urls.append(lkdn_url('4069063289'))
+    ids.append('3916719801')
+    urls.append(lkdn_url('3916719801'))
     print(f'{len(ids)} jobs are ready to process. {ids} ')
     if len(ids)==0:
         return 0
@@ -494,7 +494,11 @@ def create_resume_from_lkdn_id(lkdn, parameters):
 
         for url in urls:
             try:
+                #bot.apply_component
                 bot.generate_resume_from_url(url)
+
+                log = write_activity_log(bot.apply_component.gpt_answerer.job, activity='discovered')
+                printc.printcolor(log, 'blue')
             except Exception as e:
                 printc.printred(f"Failed to create a resume from id: {line}")
         # finally:
@@ -502,6 +506,21 @@ def create_resume_from_lkdn_id(lkdn, parameters):
         #    browser.quit()
 
     return 0
+
+def write_activity_log(job:Job, activity='discovered', file="job_search_activity_log.csv", path=r'C:\Users\al\Documents\Jobs\Applications'):
+    header = ["ID","Company","Status","Position","Salary Range","Office Policy","Notes","Job Posting","Path","Discovered Date","Applied Date","Screening Date","Next interview date"]
+    fn = os.path.join(path, file)
+    if not os.path.exists(fn):
+        with open(fn, mode="w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerows(header)
+
+    new_line = [job.id, job.company, activity, job.title, job.compensation, job.office_policy, '', job.link, datetime.date.today().strftime(''),job.resume.path, '','','']
+    with open(fn, mode="a", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerows(new_line)  # Append rows
+
+    return new_line
 
 
 def create_resume_from_local_data(jobs, parameters):
@@ -722,7 +741,7 @@ def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_te
     if mode=='resume_lkdn':
         code = create_resume_from_lkdn_id(lkdn=lkdn, parameters=parameters)
         _, _,openai_api_key = get_secrets_from_parameters(parameters)
-        cover = LLMCoverJobDescription(openai_api_key=openai_api_key)
+        #cover = LLMCoverJobDescription(openai_api_key=openai_api_key)
         exit_(code, start_time)
 
     if mode=='search_lkdn':

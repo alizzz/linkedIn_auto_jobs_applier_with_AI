@@ -1,4 +1,3 @@
-import os
 import shutil
 import base64
 import datetime
@@ -6,26 +5,27 @@ import json
 import os
 import random
 import re
+import shutil
 import tempfile
 import time
 import traceback
-
-import wcwidth
-
-from src.job import Job
-from src.utils import printc, EnvironmentKeys
 from typing import List, Optional, Any, Tuple
+
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
-from selenium.webdriver import ActionChains
+
 import src.utils as utils
 from CustomExceptions import NotRelevantError
+from src.job import Job
+from src.utils import printc, EnvironmentKeys
+
+
 #import src.config as config
 
 class LinkedInEasyApplier:

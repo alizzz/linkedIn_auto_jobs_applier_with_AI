@@ -52,7 +52,7 @@ class JobApplicationProfile:
         except yaml.YAMLError as e:
             raise ValueError("Error parsing YAML file.") from e
         except Exception as e:
-            raise RuntimeError("An unexpected error occurred while parsing the YAML file.") from e
+            raise RuntimeError( "An unexpected error occurred while parsing the YAML file.") from e
 
         if not isinstance(data, dict):
             raise TypeError("YAML data must be a dictionary.")
@@ -63,9 +63,9 @@ class JobApplicationProfile:
         except KeyError as e:
             raise KeyError(f"Required field {e} is missing in self_identification data.") from e
         except TypeError as e:
-            raise TypeError(f"Error in self_identification data: {e}") from e
+            raise TypeError( f"Error in self_identification data: {e}") from e
         except AttributeError as e:
-            raise AttributeError("Attribute error in self_identification processing.") from e
+            raise AttributeError( "Attribute error in self_identification processing.") from e
         except Exception as e:
             raise RuntimeError("An unexpected error occurred while processing self_identification.") from e
 
@@ -85,13 +85,13 @@ class JobApplicationProfile:
         try:
             self.work_preferences = WorkPreferences(**data['work_preferences'])
         except KeyError as e:
-            raise KeyError(f"Required field {e} is missing in work_preferences data.") from e
+            raise KeyError( f"Required field {e} is missing in work_preferences data.") from e
         except TypeError as e:
-            raise TypeError(f"Error in work_preferences data: {e}") from e
+            raise TypeError( f"Error in work_preferences data: {e}") from e
         except AttributeError as e:
-            raise AttributeError("Attribute error in work_preferences processing.") from e
+            raise AttributeError( "Attribute error in work_preferences processing.") from e
         except Exception as e:
-            raise RuntimeError("An unexpected error occurred while processing work_preferences.") from e
+            raise RuntimeError( "An unexpected error occurred while processing work_preferences.") from e
 
         # Process availability
         try:

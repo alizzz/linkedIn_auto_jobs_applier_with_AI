@@ -17,6 +17,7 @@ personal_information:
   name_suffix: ""
 
 resume_title: "[Position Title]"
+cover_text:
 
 career_summary:
   - "[summary line 1]"

@@ -1,17 +1,16 @@
-import os
-import random
-import time
-import re
-from selenium import webdriver
-import json
-from collections import defaultdict
 import csv
 import datetime
+import json
+import os
+import random
+import re
+import time
 import traceback
+from collections import defaultdict
+from dataclasses import asdict, is_dataclass
 from typing import Type, TypeVar
-from dataclasses import dataclass, asdict, is_dataclass
-from lib_resume_builder_AIHawk.utils import HTML_to_PDF
 
+from selenium import webdriver
 
 chromeProfilePath = os.path.join(os.getcwd(), "chrome_profile", "linkedin_profile")
 
@@ -379,6 +378,7 @@ def process_items(input_json):
     # Convert the final result to JSON
     return result_list
 
+
 class EnvironmentKeys:
     def __init__(self):
         self.skip_apply = self._read_env_key_bool("SKIP_APPLY")
@@ -426,6 +426,5 @@ class EnvironmentKeys:
             if key_true: return key_true
             if key_false: return key_false
         else: return default_value if default_value is not None else False
-
 
 

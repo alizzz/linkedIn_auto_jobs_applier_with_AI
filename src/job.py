@@ -5,6 +5,7 @@ import re
 from typing import Type, TypeVar
 from dataclasses import dataclass, asdict, astuple
 import pathlib
+
 from src.utils import printc
 from src.utils import EnvironmentKeys
 from src.utils import is_valid_non_empty_string, make_valid_os_path_string, make_valid_path, get_state_from_loc, get_id_from_linkedin_url
@@ -78,7 +79,6 @@ class DocSet:
         self.path=path
         self._file_name=name
 
-
 @dataclass
 class Job:
     id: str = ""
@@ -120,6 +120,13 @@ class Job:
 
     def serialize(self)->str:
         return json.dumps(asdict(self), default=custom_job_serializer)
+
+    def deserialize(self, data: str):
+        if is_valid_non_empty_string(data):
+        # Load the JSON data into a dictionary, using custom_deserializer to handle special cases
+            return deserialize(Job, data)
+        else:
+            return None
 
     #example use: job=Job.deserialize(Job, json_str, job_custom_deserializer)
 
@@ -163,14 +170,6 @@ class Job:
             j.job_docset = DocSet(docset_name='resume', _file_name=os.path.splitext(dict1["resume_pdf"])[0])
 
         return j
-
-    def deserialize(self, data: str):
-        if is_valid_non_empty_string(data):
-        # Load the JSON data into a dictionary, using custom_deserializer to handle special cases
-            return deserialize(Job, data)
-        else:
-            return None
-
 
     def save(self, location=None, position=None, base_path=None):
         try:
@@ -607,4 +606,36 @@ class Job:
         {self.description or 'No description provided.'}
         """
         return job_information.strip()
+
+    def get_llm_prompt_info(self, llm_prompt_format:str=None, is_brief_description:bool = True, is_long_description:bool=False, map_data:dict = None):
+        if not llm_prompt_format:
+            llm_prompt_format = """
+            ***Begin Job Information***
+            Company Name: {company_name}
+            Job Title: {job_title}
+            {job_description}
+            ***End Job Information***
+            """
+
+        desc_summary = f'Job Description Summary:{self.job_description_summary}'
+        desc_long = f'Job Description Raw:{self.description}'
+        desc = ''
+        if is_brief_description and is_long_description:
+            desc = f'{desc_summary}\nJob Description Details:{self.description}'
+        elif is_brief_description and not is_long_description:
+            desc = desc_summary
+        elif not is_brief_description and is_long_description:
+            desc = desc_long
+        else:
+            desc = desc_summary
+
+        if not map_data:
+            map_data={}
+
+        map_data["company_name"]=self.company
+        map_data["job_title"]=self.title
+        map_data["job_description"] = desc
+
+        return llm_prompt_format.format_map(map_data)
+
 

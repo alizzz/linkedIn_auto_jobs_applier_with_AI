@@ -1,93 +1,125 @@
 import json
-import os
 import re
 import textwrap
-from datetime import datetime
+import traceback
 from typing import Dict, List
-from pathlib import Path
-from dotenv import load_dotenv
-from langchain_core.messages.ai import AIMessage
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompt_values import StringPromptValue
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
+
 from Levenshtein import distance
-from src.utils import EnvironmentKeys, is_valid_non_empty_string
+from dotenv import load_dotenv
+from langchain.schema import SystemMessage, AIMessage
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts.chat import ChatPromptValue
+from langchain_openai import ChatOpenAI
+
 import src.strings as strings
+from lib_resume_builder_AIHawk.llm_logger import LLMLogger
 from src.job import Job
-from lib_resume_builder_AIHawk.config import GlobalConfig
+from src.utils import is_valid_non_empty_string
 
 load_dotenv()
 
-class LLMLogger:
-    
-    def __init__(self, llm: ChatOpenAI):
-        self.llm = llm
-
-    @staticmethod
-    def log_request(prompts, parsed_reply: Dict[str, Dict]):
-        calls_log =  os.path.join(EnvironmentKeys.get_key('OUTPUT_FILE_DIRECTORY', False, r'data_folder\output'), "open_ai_calls.json")
-        if isinstance(prompts, StringPromptValue):
-            prompts = prompts.text
-        elif isinstance(prompts, Dict):
-            # Convert prompts to a dictionary if they are not in the expected format
-            prompts = {
-                f"prompt_{i+1}": prompt.content
-                for i, prompt in enumerate(prompts.messages)
-            }
-        else:
-            prompts = {
-                f"prompt_{i+1}": prompt.content
-                for i, prompt in enumerate(prompts.messages)
-            }
-
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Extract token usage details from the response
-        token_usage = parsed_reply["usage_metadata"]
-        output_tokens = token_usage["output_tokens"]
-        input_tokens = token_usage["input_tokens"]
-        total_tokens = token_usage["total_tokens"]
-
-        # Extract model details from the response
-        model_name = parsed_reply["response_metadata"]["model_name"]
-        prompt_price_per_token = 0.00000015
-        completion_price_per_token = 0.0000006
-
-        # Calculate the total cost of the API call
-        total_cost = (input_tokens * prompt_price_per_token) + (
-            output_tokens * completion_price_per_token
-        )
-
-        # Create a log entry with all relevant information
-        log_entry = {
-            "model": model_name,
-            "time": current_time,
-            "prompts": prompts,
-            "replies": parsed_reply["content"],  # Response content
-            "total_tokens": total_tokens,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "total_cost": total_cost,
-        }
-
-        # Write the log entry to the log file in JSON format
-        with open(calls_log, "a", encoding="utf-8") as f:
-            json_string = json.dumps(log_entry, ensure_ascii=False, indent=4)
-            f.write(json_string + "\n")
+# class LLMLogger:
+#
+#     def __init__(self, llm: ChatOpenAI):
+#         self.llm = llm
+#
+#     @staticmethod
+#     def log_request(prompts, parsed_reply: Dict[str, Dict]):
+#         calls_log =  os.path.join(EnvironmentKeys.get_key('OUTPUT_FILE_DIRECTORY', False, r'data_folder\output'), "open_ai_calls.json")
+#         if isinstance(prompts, StringPromptValue):
+#             prompts = prompts.text
+#         elif isinstance(prompts, Dict):
+#             # Convert prompts to a dictionary if they are not in the expected format
+#             prompts = {
+#                 f"prompt_{i+1}": prompt.content
+#                 for i, prompt in enumerate(prompts.messages)
+#             }
+#         else:
+#             prompts = {
+#                 f"prompt_{i+1}": prompt.content
+#                 for i, prompt in enumerate(prompts.messages)
+#             }
+#
+#         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+#
+#         # Extract token usage details from the response
+#         token_usage = parsed_reply["usage_metadata"]
+#         output_tokens = token_usage["output_tokens"]
+#         input_tokens = token_usage["input_tokens"]
+#         total_tokens = token_usage["total_tokens"]
+#
+#         # Extract model details from the response
+#         model_name = parsed_reply["response_metadata"]["model_name"]
+#         prompt_price_per_token = 0.00000015
+#         completion_price_per_token = 0.0000006
+#
+#         # Calculate the total cost of the API call
+#         total_cost = (input_tokens * prompt_price_per_token) + (
+#             output_tokens * completion_price_per_token
+#         )
+#
+#         # Create a log entry with all relevant information
+#         log_entry = {
+#             "model": model_name,
+#             "time": current_time,
+#             "prompts": prompts,
+#             "replies": parsed_reply["content"],  # Response content
+#             "total_tokens": total_tokens,
+#             "input_tokens": input_tokens,
+#             "output_tokens": output_tokens,
+#             "total_cost": total_cost,
+#         }
+#
+#         # Write the log entry to the log file in JSON format
+#         with open(calls_log, "a", encoding="utf-8") as f:
+#             json_string = json.dumps(log_entry, ensure_ascii=False, indent=4)
+#             f.write(json_string + "\n")
 
 
 class LoggerChatModel:
 
-    def __init__(self, llm: ChatOpenAI):
+    def __init__(self, llm: ChatOpenAI, system_prompt=None):
         self.llm = llm
+        self.history = []  # List to store the conversation history
+        if system_prompt:
+            self.history.append({"role": "system", "content": system_prompt})
+        print(traceback.print_stack())
 
-    def __call__(self, messages: List[Dict[str, str]]) -> str:
+    def __call__(self, messages:List[Dict[str, str]]) -> str:
         # Call the LLM with the provided messages and log the response.
-        reply = self.llm(messages)
+        if isinstance(messages, ChatPromptValue):
+            self.history+=messages.to_messages()
+        else:
+            self.history+=messages
+
+        reply = self.llm(self.history)
+        self.history.append(reply)
+
         parsed_reply = self.parse_llmresult(reply)
         LLMLogger.log_request(prompts=messages, parsed_reply=parsed_reply)
+        print(traceback.print_stack())
+        print(self.history)
         return reply
+
+    def add_system_message(self, message):
+        if isinstance(message, str):
+            self.history.append(SystemMessage(message))
+        if isinstance(message, SystemMessage):
+            self.history.append(message)
+
+    def get_system_messages(self):
+        return next((msg for msg in self.history if msg["role"] == "system"), None)
+    def clear_conversation(self, system_message=None, keep_system_messages=True):
+        old_system_messages = next((msg for msg in self.history if msg["role"] == "system"), None)
+        new_system_message = []
+        if old_system_messages and keep_system_messages:
+            new_system_message.extend(old_system_messages)
+        if system_message:
+            new_system_message.extend(system_message)
+        self.history = [system_message] if system_message else []
+    def set_up_new_conversation(self, system_prompt=None, keep_system_messages=True):
+        self.clear_conversation(system_message=system_prompt, keep_system_messages=keep_system_messages)
 
     def with_structured_output(self,schema=None):
         if schema:
@@ -99,6 +131,7 @@ class LoggerChatModel:
         response_metadata = llmresult.response_metadata
         id_ = llmresult.id
         usage_metadata = llmresult.usage_metadata
+
         parsed_result = {
             "content": content,
             "response_metadata": {
@@ -112,17 +145,30 @@ class LoggerChatModel:
                 "input_tokens": usage_metadata.get("input_tokens", 0),
                 "output_tokens": usage_metadata.get("output_tokens", 0),
                 "total_tokens": usage_metadata.get("total_tokens", 0),
+                "cached_tokens":response_metadata.get('token_usage').get('prompt_tokens_details').get('cached_tokens',0)
             },
         }
         return parsed_result
 
 
 class GPTAnswerer:
-    def __init__(self, openai_api_key):
-        self.llm_cheap = LoggerChatModel(
-            ChatOpenAI(model_name="gpt-4o-mini", openai_api_key=openai_api_key, temperature=0.4)
+    def __init__(self, openai_api_key, model_name="gpt-4o-mini", temperature=0.5, system_prompt=None, inject_system_prompt=True):
+        self.llm = LoggerChatModel(
+            ChatOpenAI(model_name=model_name, openai_api_key=openai_api_key, temperature=temperature)
         )
         self.job = None
+        self.resume = None
+        self.system_prompt = None
+        self.inject_system_prompt = inject_system_prompt
+
+    def set_system_prompt(self, system_prompt):
+        if not system_prompt: return
+        if isinstance(system_prompt, AIMessage):
+            self.system_prompt = system_prompt.content
+
+
+        self.system_prompt = system_prompt
+
     @property
     def job_description(self):
         return self.job.description
@@ -195,7 +241,7 @@ class GPTAnswerer:
 
             prompt_sanitize_template = self._preprocess_template_string(prompt_is_relevant)
             prompt = ChatPromptTemplate.from_template(prompt_sanitize_template)
-            chain = prompt | self.llm_cheap | StrOutputParser()
+            chain = prompt | self.llm | StrOutputParser()
 
             # ToDo Removed while testing. Restore when testing is finished
             #output = chain.invoke({"relevance_criteria": relevance_criteria, "job_desc": job_desc})
@@ -220,7 +266,7 @@ class GPTAnswerer:
         try:
             prompt_sanitize_template = self._preprocess_template_string( strings.prompt_abbreviated_name_title)
             prompt = ChatPromptTemplate.from_template(prompt_sanitize_template)
-            chain = prompt | self.llm_cheap | StrOutputParser()
+            chain = prompt | self.llm | StrOutputParser()
             output = chain.invoke({"position_title": position, "full_company_name": company_name})
             j = json.loads(output, strict=False)
             c = j["company"]
@@ -229,12 +275,58 @@ class GPTAnswerer:
             print(f'EXCEPTION while abbreviating job title. Original title: {position}. Error: {e}')
         return c, p
     def summarize_job_description(self, text: str) -> str:
+
         strings.summarize_prompt_template = self._preprocess_template_string(
-            strings.summarize_prompt_template
-        )
+            strings.summarize_prompt_template )
+
+        #region Testing section, discard
+        # system_prompt_text = """
+        # Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes.
+        # Your task is to thoroughly analyze work experience of an applicant detailed in a resume and thorougly analyze job description
+        # For every question, provide response based on applicant's resume, adjusted to the job requirements, to make it attractive for hiring manager.
+        # Ensuring that your response is concise, based on the applicant's resume and aligns well with the provided job description.
+        # Your main goal is to help applicant to get hired
+        #
+        # ***Applicant's Resume Begin ***
+        # *** Resume End ***
+        #
+        # *** Job Description Begins ***
+        # *** Job Description Ends ***
+        # """
+        #
+        # sys_msg = SystemMessage(system_prompt_text)
+        # prompt = ChatPromptTemplate.from_messages([sys_msg])
+        # chain = prompt | self.llm_cheap | StrOutputParser()
+        # output = chain.invoke({})
+        #
+        # prompt = ChatPromptTemplate.from_messages([HumanMessage("What are the skills of the applicant that will get him hired?")])
+        # chain = prompt | self.llm_cheap | StrOutputParser()
+        # output = chain.invoke({})
+        #
+        # prompt = ChatPromptTemplate.from_template("Describe main responsibilities at {company}")
+        # chain = prompt | self.llm_cheap | StrOutputParser()
+        # output = chain.invoke({"company":"ancestry"})
+        #
+        # prompt = ChatPromptTemplate.from_template("Describe main responsibilities at {company}")
+        # chain = prompt | self.llm_cheap | StrOutputParser()
+        # output = chain.invoke({"company":"google"})
+        #
+        # #ToDo Remove - set for debugging
+        # strings.summarize_prompt_template = self._preprocess_template_string(
+        #     "What is the commonly recognized job title? Job:{text}"
+        # )
+        # text = 'Head of Data Science and Analytics and Machine Learning'
+        #
+        #endregion
+
         prompt = ChatPromptTemplate.from_template(strings.summarize_prompt_template)
-        chain = prompt | self.llm_cheap | StrOutputParser()
+        chain = prompt | self.llm | StrOutputParser()
         output = chain.invoke({"text": text})
+
+
+
+
+
         return output
 
     def get_job_compensation_from_job_description(self, job_desc:str) -> str:
@@ -242,14 +334,14 @@ class GPTAnswerer:
             strings.prompt_job_compensation
         )
         prompt = ChatPromptTemplate.from_template(strings.prompt_job_compensation)
-        chain = prompt | self.llm_cheap | StrOutputParser()
+        chain = prompt | self.llm | StrOutputParser()
         output = chain.invoke({"job_description": job_desc})
         print(f"Salary compensation range is {output}")
         return output
 
     def _create_chain(self, template: str):
         prompt = ChatPromptTemplate.from_template(template)
-        return prompt | self.llm_cheap | StrOutputParser()
+        return prompt | self.llm | StrOutputParser()
     
     def answer_question_textual_wide_range(self, question: str) -> str:
         # Define chains for each section of the resume
@@ -357,7 +449,7 @@ class GPTAnswerer:
         Provide only the exact name of the section from the list above with no additional text.
         """
         prompt = ChatPromptTemplate.from_template(section_prompt)
-        chain = prompt | self.llm_cheap | StrOutputParser()
+        chain = prompt | self.llm | StrOutputParser()
         output = chain.invoke({"question": question})
         section_name = output.lower().replace(" ", "_")
         if section_name == "cover_letter":
@@ -375,7 +467,7 @@ class GPTAnswerer:
     def answer_question_numeric(self, question: str, default_experience: int = 3) -> int:
         func_template = self._preprocess_template_string(strings.numeric_question_template)
         prompt = ChatPromptTemplate.from_template(func_template)
-        chain = prompt | self.llm_cheap | StrOutputParser()
+        chain = prompt | self.llm | StrOutputParser()
         output_str = chain.invoke({"resume_educations": self.resume.education_details,"resume_jobs": self.resume.work_experiences, "resume_projects": self.resume.projects , "question": question})
         try:
             output = self.extract_number_from_string(output_str)
@@ -393,7 +485,7 @@ class GPTAnswerer:
     def answer_question_from_options(self, question: str, options: list[str]) -> str:
         func_template = self._preprocess_template_string(strings.options_template)
         prompt = ChatPromptTemplate.from_template(func_template)
-        chain = prompt | self.llm_cheap | StrOutputParser()
+        chain = prompt | self.llm | StrOutputParser()
         output_str = chain.invoke({"resume": self.resume, "question": question, "options": options})
         best_option = self.find_best_match(output_str, options)
         return best_option
@@ -406,7 +498,7 @@ class GPTAnswerer:
         phrase: {phrase}
         """
         prompt = ChatPromptTemplate.from_template(prompt_template)
-        chain = prompt | self.llm_cheap | StrOutputParser()
+        chain = prompt | self.llm | StrOutputParser()
         response = chain.invoke({"phrase": phrase})
         if "resume" in response:
             return "resume"
