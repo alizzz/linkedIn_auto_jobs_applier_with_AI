@@ -636,6 +636,7 @@ class LinkedInJobManager:
 
                     #GPT
                     job.set_job_description_summary(self.gpt_answerer.summarize_job_description(jd))
+                    print('Setting job description summary in LinkedInJobManager::build_job_list()')
                     self.gpt_answerer.is_relevant_job(job)
 
 

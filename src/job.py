@@ -8,7 +8,7 @@ import pathlib
 
 from src.utils import printc
 from src.utils import EnvironmentKeys
-from src.utils import is_valid_non_empty_string, make_valid_os_path_string, make_valid_path, get_state_from_loc, get_id_from_linkedin_url
+from src.utils import is_valid_non_empty_string, make_valid_os_path_string, make_valid_path, get_state_from_loc, get_id_from_linkedin_url, abbreviate_location
 from src.utils import custom_job_serializer, deserialize
 import traceback
 @dataclass
@@ -171,60 +171,24 @@ class Job:
 
         return j
 
-    def save(self, location=None, position=None, base_path=None):
+    def save(self):
+        def write(fn, content, path, enc = 'utf-8', mode = 'w'):
+            try:
+                with open(file = os.path.join(path, fn), mode=mode, encoding=enc) as f:
+                    print(f'Saving job description to {os.path.join(path, fn)}')
+                    f.write(content)
+            except Exception as e:
+                printc.printred(f'ERROR while saving {os.path.splitext(fn)[0]} for job id {self.id}. Error: {e}')
+
         try:
-            if location is None:
-                location = self.loc_path
-            if position is None:
-                position=make_valid_path(self.abbreviated_position, self.title, max_len=35)
-            if base_path is None:
-                base_path=self.base_path
+            print(f'In job::save() for job:{self.id}')
+            path = self.get_path()
+            os.makedirs(path, exist_ok=True)
 
-            loc = make_valid_path(location, max_len=20)
-            path_relevant_remote = os.path.join(base_path, 'Relevant', '_Remote')
-            path_relevant_loc = os.path.join(base_path, 'Relevant', loc)
-            path_x_relevant_loc = os.path.join(base_path, 'X_relevant', loc)
-            path_x_relevant_remote = os.path.join(base_path, 'X_relevant', '_Remote')
-
-            fn_co = f'{make_valid_path(self.truncated_co_name, self.company, max_len=20)}'
-            fn_op = f'{self.office_policy}' if self.office_policy.lower() in ['remote','hybrid','on-site'] else 'unk'
-            fn_easy = 'easy' if self.is_easyApply else 'site'
-            fn_relevant = 'rlv' if self.is_relevant else 'x_rlv'
-            fn = f'{self.get_dt_string(fmt='%Y-%m-%d')}.{fn_co}.{position}.{fn_op}.{fn_relevant}.{fn_easy}.{self.id}'
-
-            if self.is_relevant:
-                if self.office_policy.lower() == 'remote':
-                    path = path_relevant_remote
-                else:
-                    path = path_relevant_loc
-            else:
-                if self.office_policy.lower() == 'remote':
-                    path = path_x_relevant_remote
-                else:
-                    path = path_x_relevant_loc
-
-            os.makedirs(os.path.join(path, fn), exist_ok=True)
-            try:
-                with open(os.path.join(path, fn, 'desc.txt'), 'w', encoding='utf-8') as f:
-                    f.write(self.description)
-            except Exception as e:
-                printc.printred(f'ERROR while saving job description for job id {self.id}. Error: {e}')
-            try:
-                with open(os.path.join(path, fn, 'desc_summary.txt'), 'w', encoding='utf-8') as f:
-                    f.write(self.job_description_summary)
-            except Exception as e:
-                printc.printred(f'ERROR while saving job description summary for job id {self.id}. Error: {self.id}')
-            try:
-                with open(os.path.join(path, fn, 'job.json'), 'w', encoding='utf-8') as f:
-                    s = self.serialize()
-                    f.write(s)
-            except Exception as e:
-                printc.printred(f'ERROR while serializing job id {self.id}. Error: {self.id}')
-            try:
-                with open(os.path.join(path, fn, f'job_{self.id}.url'), 'w') as f:
-                    f.write(f"[InternetShortcut]\nURL={self.link}\n")
-            except Exception as e:
-                printc.printred(f"Exception while saving shortcut for id {self.id}. Error {e}")
+            write(f'job_desc_raw.{self.id}.txt', self.description, path=path)
+            write(f'job_desc_summary.{self.id}.txt', self.job_description_summary, path=path)
+            write(f'job.{self.id}.json', self.serialize(), path=path)
+            write(f'job.link.{self.id}.url', f"[InternetShortcut]\nURL={self.link}\n", path=path)
         except Exception as e:
             printc.printred(f'ERROR while saving job id {self.id}. Error: {self.id}')
             print(traceback.format_exc())
@@ -316,7 +280,7 @@ class Job:
             "applied": self.is_applied,
             "link": self.link,
             "job_recruiter": self.recruiter_link,
-            "base_path": self.base_loc_path,
+            "base_path": self.base_path,
             "skills": self.skills,
             "quals": self.quals,
             "relevancy": self.is_relevant_str,
@@ -332,9 +296,6 @@ class Job:
             "resume_html": self.resume.html
         }
         return data
-    #@property
-    #def base_path(self):
-
 
     @property
     def is_blacklisted(self)->bool:
@@ -464,16 +425,30 @@ class Job:
         loc = make_valid_path(get_state_from_loc(self.location)) if self.location is not None else 'loc_unk'
 
         if name is None:
-            return self.base_loc_path
+            return self.base_path
         else:
-            return os.path.join(self.base_path, self.is_relevant_str, loc, name)
+            return os.path.join(self.base_path, name)
 
     def get_fname(self):
         self.set_date_time()  # setting it only if it has not been set before
-        office_policy = f'.{self._office_policy}' if self._office_policy.lower() in ['remote', 'hybrid'] else ''
+        #office policy
+        # office_policy = f'.{self._office_policy}' if self._office_policy.lower() in ['remote', 'hybrid'] else ''
+        if self._office_policy.lower() == 'remote':
+            office_policy = '.R'
+        elif self._office_policy.lower() == 'hybrid':
+            office_policy = ".H"
+        elif self._office_policy.lower() == "on-site":
+            office_policy = ".O"
+        else: office_policy = "._"
+
+
+        loc = abbreviate_location(self.location)
+        relevant = 'Z' if self.is_relevant else 'X'
+
+
         co_name = f'.{self.truncated_co_name}' if self.truncated_co_name is not None else '.Co_'
         pos = f'.{self.abbreviated_position}'
-        fname = f'{self.get_dt_string(fmt='%Y-%m-%d')}{co_name}{pos}{office_policy}.{self.id}'
+        fname = f'{self.get_dt_string(fmt='%Y-%m-%d')}{co_name}{pos}{office_policy}.{loc}.{relevant}.{self.id}'
         return fname
     @property
     def fname(self):
@@ -485,7 +460,7 @@ class Job:
             dt_str = datetime.datetime.now().strftime("%Y-%m-%d")
         else:
             dt_str = dt.strftime("%Y-%m-%d")
-        return os.path.join(EnvironmentKeys.get_key('OUTPUT_JOBS_DIRECTORY', False, r'data_folder\output\Jobs\name_s'), dt_str).__str__()
+        return EnvironmentKeys.get_key('OUTPUT_JOBS_DIRECTORY', False, r'data_folder\output\Jobs\name_s').__str__()
 
     @property
     def base_path(self):
@@ -621,7 +596,7 @@ class Job:
         desc_long = f'Job Description Raw:{self.description}'
         desc = ''
         if is_brief_description and is_long_description:
-            desc = f'{desc_summary}\nJob Description Details:{self.description}'
+            desc = f'{desc_summary}\n{desc_long}'
         elif is_brief_description and not is_long_description:
             desc = desc_summary
         elif not is_brief_description and is_long_description:
@@ -637,5 +612,3 @@ class Job:
         map_data["job_description"] = desc
 
         return llm_prompt_format.format_map(map_data)
-
-

@@ -218,10 +218,10 @@ class GPTAnswerer:
                             relevance_criteria:str='software development, software engineering, machine learning, data science, analytics, or AI' ) -> bool:
         relevant = False
         try:
-            if job.job_description_summary is not None and len(job.job_description_summary)>0:
+            if job.job_description_summary:
                 job_desc=job.job_description_summary
             else:
-                if not is_valid_non_empty_string (job.description):
+                if not job.description:
                     raise Exception('Both job description and job description summary are empty. Unable to continue')
                 job_desc = job.description
             #ToDo Load prompt from file (or dict)
@@ -275,7 +275,9 @@ class GPTAnswerer:
             print(f'EXCEPTION while abbreviating job title. Original title: {position}. Error: {e}')
         return c, p
     def summarize_job_description(self, text: str) -> str:
-
+        print(f'GPTAnswerer:summarize_job_description() should not be called here')
+        traceback.print_stack()
+        raise AssertionError('GPTAnswerer:summarize_job_description() should not be called here')
         strings.summarize_prompt_template = self._preprocess_template_string(
             strings.summarize_prompt_template )
 

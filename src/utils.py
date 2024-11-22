@@ -333,6 +333,81 @@ class printc:
         # Stampa il testo in giallo
         print(f"{YELLOW}{text}{RESET}")
 
+def abbreviate_location(location):
+    if not location: return "__"
+    # Normalize input by replacing underscores and trimming whitespace
+    location = location.replace("_", " ").strip().lower()
+
+    # US States and abbreviations
+    us_states = {
+        'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+        'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+        'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+        'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+        'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+    }
+
+    # European Countries and abbreviations
+    european_countries = {
+        'albania': 'AL', 'andorra': 'AD', 'armenia': 'AM', 'austria': 'AT', 'azerbaijan': 'AZ',
+        'belarus': 'BY', 'belgium': 'BE', 'bosnia and herzegovina': 'BA', 'bulgaria': 'BG',
+        'croatia': 'HR', 'cyprus': 'CY', 'czechia': 'CZ', 'denmark': 'DK', 'estonia': 'EE',
+        'finland': 'FI', 'france': 'FR', 'georgia': 'GE', 'germany': 'DE', 'greece': 'GR',
+        'hungary': 'HU', 'iceland': 'IS', 'ireland': 'IE', 'italy': 'IT', 'kazakhstan': 'KZ',
+        'kosovo': 'XK', 'latvia': 'LV', 'liechtenstein': 'LI', 'lithuania': 'LT', 'luxembourg': 'LU',
+        'malta': 'MT', 'moldova': 'MD', 'monaco': 'MC', 'montenegro': 'ME', 'netherlands': 'NL',
+        'north macedonia': 'MK', 'norway': 'NO', 'poland': 'PL', 'portugal': 'PT', 'romania': 'RO',
+        'russia': 'RU', 'san marino': 'SM', 'serbia': 'RS', 'slovakia': 'SK', 'slovenia': 'SI',
+        'spain': 'ES', 'sweden': 'SE', 'switzerland': 'CH', 'turkey': 'TR', 'ukraine': 'UA',
+        'united kingdom': 'GB', 'vatican city': 'VA'
+    }
+
+    # Asia-Pacific Countries and Abbreviations
+    asia_pacific = {
+        'australia': 'AU', 'new zealand': 'NZ', 'japan': 'JP', 'south korea': 'KR', 'philippines': 'PH',
+        'indonesia': 'ID', 'malaysia': 'MY', 'thailand': 'TH', 'vietnam': 'VN', 'taiwan': 'TW'
+    }
+
+    # Special Cases
+    special_cases = {
+        'india': 'IN.__',
+        'china': 'CH.__',
+        'hong kong': 'HK.__',
+        'singapore': 'SIN.__',
+        'european economic area': 'EU.__',
+        'san francisco bay area': 'CA.SF'
+    }
+
+    # Check if it's a City, State pattern
+    match_us = re.match(r'^[a-z\s]+,\s*([a-z]{2})$', location, re.IGNORECASE)
+    if match_us:
+        state = match_us.group(1).upper()
+        if state in us_states:
+            return f"US.{state}"
+
+    # Check if it's a City, Country pattern
+    match_country = re.match(r'^[a-z\s]+,\s*([a-z\s]+)$', location, re.IGNORECASE)
+    if match_country:
+        country = match_country.group(1).strip().lower()
+        if country in european_countries:
+            return f"EU.{european_countries[country]}"
+        if country in asia_pacific:
+            return f"AP.{asia_pacific[country]}"
+        if country in special_cases:
+            return special_cases[country]
+
+    # Check for direct mappings
+    if location in ['united states', 'us']:
+        return 'US.__'
+    if location in european_countries:
+        return f"EU.{european_countries[location]}"
+    if location in asia_pacific:
+        return f"AP.{asia_pacific[location]}"
+    if location in special_cases:
+        return special_cases[location]
+
+    # If no match found
+    return make_valid_path(location)
 def get_state_from_loc(loc, pattern = r",?\s([A-Z]{2})$|,\s([A-Za-z\s]+)$", valid_path = True):
     if loc is None or len(loc)==0: return 'None'
     try:

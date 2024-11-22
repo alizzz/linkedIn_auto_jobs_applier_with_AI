@@ -480,8 +480,8 @@ def create_resume_from_lkdn_id(lkdn, parameters):
             lines = [line + "\n" for line in lines]  # Add '\n' to each line
             f.writelines(lines)
 
-    ids.append('3916719801')
-    urls.append(lkdn_url('3916719801'))
+    # ids.append('3916719801')
+    # urls.append(lkdn_url('3916719801'))
     print(f'{len(ids)} jobs are ready to process. {ids} ')
     if len(ids)==0:
         return 0
