@@ -4,13 +4,13 @@ import re
 import os
 import yaml
 
-class GlobalConfig:
+class GlobalConfigSingle:
     _instance = None  # Class-level instance
     def __init__(self):
         self.config = {}
 
     @staticmethod
-    def create(default_config_path='html2pdf.config'):
+    def create(default_config_path='data_folder/hawk_al.config'):
         # Step 1: Create argument parser and parse initial arguments
         parser = argparse.ArgumentParser(description="Global Config Parser")
         parser.add_argument("--config", type=str, default=default_config_path,
@@ -21,7 +21,7 @@ class GlobalConfig:
         #parser = create_argparser(default_config_path)
 
         # Step 2: Initialize the global config
-        global_config = GlobalConfig()
+        global_config = GlobalConfigSingle()
 
         # Step 3: Load YAML configuration from the --config parameter
         global_config.load_from_yaml(initial_args.config)
@@ -49,7 +49,7 @@ class GlobalConfig:
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
-            cls._instance = super(GlobalConfig, cls).__new__(cls)
+            cls._instance = super(GlobalConfigSingle, cls).__new__(cls)
             cls._instance.config = {}
         return cls._instance
 

@@ -16,6 +16,9 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.by import By
+
+from src.global_config import GlobalConfigSingle
+from src.g_sheets import GSheets
 from src.job import Job
 from src.utils import chromeBrowserOptions
 from src.utils import printc
@@ -31,6 +34,7 @@ from lib_resume_builder_AIHawk.html_resume import HtmlResume
 from lib_resume_builder_AIHawk.resume import Resume
 import context
 
+gc = GlobalConfigSingle()
 
 # Suppress stderr
 sys.stderr = open(os.devnull, 'w')
@@ -383,16 +387,17 @@ def save_job_list(jobs, location):
                     else:
                         path = path_x_relevant_loc
 
-                os.makedirs(os.path.join(path, fn), exist_ok=True)
-                with open(os.path.join(path, fn,'job_desc.txt'), 'w', encoding='utf-8') as f:
-                    f.write(job.description)
-                with open(os.path.join(path, fn, 'job_desc_summary.txt'), 'w', encoding='utf-8') as f:
-                    f.write(job.job_description_summary)
-                with open(os.path.join(path, fn, 'job.json'), 'w', encoding='utf-8') as f:
-                    s = job.serialize()
-                    f.write(s)
-                with open(os.path.join(path, fn, f'linkedin_job_{job.id}.url'), 'w', encoding='utf-8') as f:
-                    f.write(f"[InternetShortcut]\nURL={job.link}\n")
+                job.save()
+            #     os.makedirs(os.path.join(path, fn), exist_ok=True)
+            #     with open(os.path.join(path, fn,'job_desc.txt'), 'w', encoding='utf-8') as f:
+            #         f.write(job.description)
+            #     with open(os.path.join(path, fn, 'job_desc_summary.txt'), 'w', encoding='utf-8') as f:
+            #         f.write(job.job_description_summary)
+            #     with open(os.path.join(path, fn, 'job.json'), 'w', encoding='utf-8') as f:
+            #         s = job.serialize()
+            #         f.write(s)
+            #     with open(os.path.join(path, fn, f'linkedin_job_{job.id}.url'), 'w', encoding='utf-8') as f:
+            #         f.write(f"[InternetShortcut]\nURL={job.link}\n")
             except Exception as e:
                 printc.printred(f"Exception while saving job id {job.id}. Error {e}")
                 print(traceback.format_exc())
@@ -425,27 +430,11 @@ def create_resume_from_lkdn_id(lkdn, parameters):
 
         return None
 
-    print(f'In create_resume_from_lkdn_id. src={lkdn}')
-    email, password, openai_api_key = get_secrets_from_parameters(parameters)
-    if lkdn is None:
-        printc.printred(f'lkdn paramter is None. Should be either valid linkedin url or id. Aborting')
-        end_time = datetime.datetime.now()
-        printc.printcolor(
-            f'create_resume_from_lkdn_id finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}',
-            "Blue")
-        return (201)
-    urls = []
-    ids = []
-    fn = get_lkdn_file(lkdn, parameters)
-    if is_valid_linkedin_id(lkdn):
-        urls.append(lkdn_url(lkdn))
-        ids.append(lkdn)
-    elif is_valid_linkedin_url(lkdn):
-        urls.append(lkdn)
-        ids.append(get_id_from_linkedin_url(lkdn))
-    elif fn:
+    def load_ids(fn, processed_ids):
+        ids=[]
+        urls=[]
         processed_ids = find_jobs_in_path(os.path.dirname(fn))
-        output_lines =[]
+        output_lines = []
         with open(fn, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
@@ -456,10 +445,11 @@ def create_resume_from_lkdn_id(lkdn, parameters):
                         output_lines.append(line)
                     else:
                         output_lines.append(f'{line} - {processed_ids.get(line)}')
-                        printc.printyellow(f'Skipping {line}. It has been already processed, dir: {processed_ids.get(line)}')
+                        printc.printyellow(
+                            f'Skipping {line}. It has been already processed, dir: {processed_ids.get(line)}')
                     continue
-                #if lines are urls - do not use it for now
-                #if is_valid_linkedin_url(line):
+                # if lines are urls - do not use it for now
+                # if is_valid_linkedin_url(line):
                 #    id = get_id_from_linkedin_url(line)
                 #    if id not in processed_ids.keys():
                 #        urls.append(line)
@@ -467,18 +457,63 @@ def create_resume_from_lkdn_id(lkdn, parameters):
                 #    else:
                 #        printc.printyellow(f'Skipping {line}. It has been already processed, dir: {processed_ids.get(line)}')
                 else:
-                    #the line is not a valid linkedin id, just copy it to the output
+                    # the line is not a valid linkedin id, just copy it to the output
                     output_lines.append(line)
-    else:
-        printc.printred(
-            f'Unknown lkdn format. Expected linkedin job ID, job url, or a file. Received: {lkdn}. Aborting')
-        return (400)
+        return ids, urls, output_lines
 
-    if True:
-        with open(fn, 'w', encoding='utf-8') as f:
-            lines = list(dict.fromkeys(output_lines))
-            lines = [line + "\n" for line in lines]  # Add '\n' to each line
-            f.writelines(lines)
+    print(f'In create_resume_from_lkdn_id. src={lkdn}')
+    email, password, openai_api_key = get_secrets_from_parameters(parameters)
+
+    urls = []
+    ids = []
+    if lkdn:
+        fn = get_lkdn_file(lkdn, parameters)
+        if is_valid_linkedin_id(lkdn):
+            urls.append(lkdn_url(lkdn))
+            ids.append(lkdn)
+        elif is_valid_linkedin_url(lkdn):
+            urls.append(lkdn)
+            ids.append(get_id_from_linkedin_url(lkdn))
+        elif fn:
+            ids, urls, output_lines = load_ids(fn)
+            if True:
+                with open(fn, 'w', encoding='utf-8') as f:
+                    lines = list(dict.fromkeys(output_lines))
+                    lines = [line + "\n" for line in lines]  # Add '\n' to each line
+                    f.writelines(lines)
+        else:
+            printc.printred(
+                f'Unknown lkdn format. Expected linkedin job ID, job url, or a file. Received: {lkdn}. Aborting')
+            return (400)
+    else:
+        try:
+            ids_ = set()
+            output_folder = r'C:\Users\al\PycharmProjects\linkedIn_auto_jobs_applier_with_AI\data_folder\output\Jobs\A_L' #parameters['outputFileDirectory']
+            processed_ids = find_jobs_in_path(output_folder)
+            gs = GSheets()
+            cols = gs.get('hawk', "B:C")
+            for r in range(len(cols)):
+                id = cols[r][0]
+                if len(cols[r])>1: continue #it is an old data, filled in already
+                pid = processed_ids.get(cols[r][0])
+                if pid:
+                    value = os.path.basename(pid)
+                    gs.update('hawk', f"C{r+1}", [[value]])
+                else:
+                    ids_.add(id)
+                    #urls.append(lkdn_url(id))
+            ids = list(ids_)
+            urls=[lkdn_url(id) for id in ids]
+        except Exception as e:
+            printc.printred(f'lkdn paramter is None. Should be either valid linkedin url or id. Aborting')
+            end_time = datetime.datetime.now()
+            printc.printcolor(
+                f'create_resume_from_lkdn_id finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}',
+                "Blue")
+            return (201)
+
+
+
 
     # ids.append('3916719801')
     # urls.append(lkdn_url('3916719801'))
@@ -496,16 +531,22 @@ def create_resume_from_lkdn_id(lkdn, parameters):
             try:
                 #bot.apply_component
                 bot.generate_resume_from_url(url)
-
-                log = write_activity_log(bot.apply_component.gpt_answerer.job, activity='discovered')
-                printc.printcolor(log, 'blue')
+                printc.printcolor(f"Finished creating a resume from id: {os.path.basename(url)}", 'magenta')
             except Exception as e:
-                printc.printred(f"Failed to create a resume from id: {line}")
+                printc.printred(f"Failed to create a resume from id: {os.path.basename(url)}")
+            try:
+                #log = write_activity_log(bot.apply_component.gpt_answerer.job, activity='discovered')
+                printc.printcolor(os.path.basename(url), 'blue')
+            except Exception as e:
+                printc.printred(f"Failed to write activity log for id: {os.path.basename(url)}")
+
         # finally:
         #    browser.close()
         #    browser.quit()
 
     return 0
+
+
 
 def write_activity_log(job:Job, activity='discovered', file="job_search_activity_log.csv", path=r'C:\Users\al\Documents\Jobs\Applications'):
     header = ["ID","Company","Status","Position","Salary Range","Office Policy","Notes","Job Posting","Path","Discovered Date","Applied Date","Screening Date","Next interview date"]
@@ -673,6 +714,7 @@ def search_lkdn(jobs, parameters):
 @click.option('--mode', type=click.Choice(['search_apply', 'convert', 'resume_lkdn', 'apply_txt', 'apply_url', 'search_lkdn', 'create_local']), default='search_apply', help='Mode of operation choose one of - search and apply(default), convert html to pdf and text, apply one that is provide')
 def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_template,
          lkdn, job_url, linkedin_id, job_file_desc, llm_cheap, llm, src_html, easy_apply, mode):
+
 
     start_time = datetime.datetime.now()
     printc.printcolor(f'Process started @ {start_time.strftime("%Y-%m-%d %H:%M:%S")}', "Blue")
