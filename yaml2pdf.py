@@ -11,7 +11,7 @@ import os
 sys.path.append(r'C:\Users\al\PycharmProjects\lib_resume_builder_AIHawk')
 
 from html2pdf import html2pdf, find_files, unique_file_name
-from src.global_config import GlobalConfig
+from src.global_config import GlobalConfigSingle
 
 from lib_resume_builder_AIHawk.resume import Resume
 
@@ -27,7 +27,7 @@ import pdfkit
 import re
 import os
 
-gc = GlobalConfig.create('html2pdf.config')
+gc = GlobalConfigSingle.create('html2pdf.config')
 
 
 CSS_FILE = r'C:\Users\al\PycharmProjects\lib_resume_builder_AIHawk\lib_resume_builder_AIHawk\resume_style\style_hawk_al_blue.css'

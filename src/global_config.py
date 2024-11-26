@@ -1,6 +1,4 @@
 import argparse
-import pdfkit
-import re
 import os
 import yaml
 
@@ -11,9 +9,55 @@ class GlobalConfigSingle:
 
     @staticmethod
     def create(default_config_path='data_folder/hawk_al.config'):
+
+        def expand_placeholders(data:dict, delim='%') -> dict:
+            """
+            Recursively replace placeholders in the values of a dictionary
+            with their corresponding values based on the keys.
+
+            :param data: Dictionary with potential placeholders in the values
+            :return: Updated dictionary with all placeholders replaced
+            """
+            import re
+
+            def replace_value(value, data):
+                """
+                Replace all placeholders in a value recursively.
+                """
+                pattern = re.compile(rf'{delim}(\w+){delim}')  # Matches placeholders like %abc%
+                while True:
+                    matches = pattern.findall(value)
+                    if not matches:
+                        break
+                    for key in matches:
+                        if key in data:
+                            # Replace the placeholder with its value
+                            value = value.replace(f"{delim}{key}{delim}", data[key])
+                        else:
+                            # If the key is not found, keep the placeholder
+                            raise KeyError(f"Key '{key}' not found in dictionary")
+                return value
+
+            # Update the dictionary with replaced values
+            updated_data = {}
+
+            for key, value in data.items():
+                if isinstance(value, str) and delim in value:  # Only replace in string values
+                    updated_data[key] = replace_value(value, data)
+                else:
+                    updated_data[key] = value  # Non-string values are left untouched
+
+            return updated_data
+
         # Step 1: Create argument parser and parse initial arguments
-        parser = argparse.ArgumentParser(description="Global Config Parser")
-        parser.add_argument("--config", type=str, default=default_config_path,
+        parser = argparse.ArgumentParser(description="Global Config Parser", conflict_handler='resolve')
+        parser.add_argument("--cfg_plain_resume", type=str, default='data_folder/plain_text_resume_al.yaml',
+                            help="Path to the YAML plain resume file")
+        parser.add_argument("--cfg", type=str, default='data_folder/config_al_SF_run_apply.yaml',
+                            help="Path to the YAML configuration file")
+        parser.add_argument("--cfg_secrets", type=str, default='data_folder/secrets_al.yaml',
+                            help="Path to the YAML configuration file")
+        parser.add_argument("--cfg_hawk", type=str, default=default_config_path,
                             help="Path to the YAML configuration file")
 
         initial_args, unknown_args = parser.parse_known_args()
@@ -24,7 +68,10 @@ class GlobalConfigSingle:
         global_config = GlobalConfigSingle()
 
         # Step 3: Load YAML configuration from the --config parameter
-        global_config.load_from_yaml(initial_args.config)
+        global_config.load_from_yaml(initial_args.cfg_plain_resume)
+        global_config.load_from_yaml(initial_args.cfg_secrets)
+        global_config.load_from_yaml(initial_args.cfg)
+        global_config.load_from_yaml(initial_args.cfg_hawk)
 
         # Step 4: Dynamically add arguments from YAML to argparse
         for key, value in global_config.config.items():
@@ -45,6 +92,9 @@ class GlobalConfigSingle:
         # Step 6: Parse all arguments and merge them into global config
         final_args = parser.parse_args()
         global_config.merge_with_args(final_args)
+
+        global_config.config = expand_placeholders(global_config.config)
+
         return global_config
 
     def __new__(cls, *args, **kwargs):
@@ -78,3 +128,8 @@ class GlobalConfigSingle:
     def set(self, key, value):
         """Set a configuration value."""
         self.config[key] = value
+
+
+
+if __name__ == "__main__":
+    gc = GlobalConfigSingle.create()

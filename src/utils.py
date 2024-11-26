@@ -9,6 +9,7 @@ import traceback
 from collections import defaultdict
 from dataclasses import asdict, is_dataclass
 from typing import Type, TypeVar
+#from src.job import JobRelevance
 
 from selenium import webdriver
 
@@ -61,6 +62,8 @@ def is_job_in_path(id, path):
 def custom_job_serializer(obj):
     if isinstance(obj, datetime.datetime):
         return obj.isoformat()  # Convert datetime to ISO string
+    if isinstance(obj, JobRelevance):
+        return dict(obj)
     raise TypeError(f"Type {type(obj)} not serializable")
 
 def custom_job_deserializer(obj):

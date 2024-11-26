@@ -47,25 +47,29 @@ class LinkedInBotFacade:
 
     @staticmethod
     def create_bot(email, openai_api_key, parameters, password, browser):
-        style_manager = StyleManager(styles_file=parameters['css'])
-        resume_generator = ResumeGenerator()
-        with open(parameters['uploads']['plainTextResume'], "r", encoding='iso-8859-1') as file:
-            plain_text_resume = file.read()
-        resume_object = Resume(plain_text_resume)
-        #ToDo - replace hardcoded string with config parameter
-        resume_generator_manager = FacadeManager(openai_api_key, style_manager, resume_generator, resume_object,
-                                                 Path("data_folder/output"))
-        resume_generator_manager.choose_style()
-        job_application_profile_object = JobApplicationProfile(plain_text_resume)
-        login_component = LinkedInAuthenticator(browser)
-        apply_component = LinkedInJobManager(browser)
-        gpt_answerer_component = LLMResumeJobDescription(openai_api_key)
-        bot = LinkedInBotFacade(login_component, apply_component)
-        bot.set_secrets(email, password)
-        bot.set_job_application_profile_and_resume(job_application_profile_object, resume_object)
-        bot.set_gpt_answerer_and_resume_generator(gpt_answerer_component, resume_generator_manager)
-        bot.set_parameters(parameters)
-        return bot
+        try:
+            style_manager = StyleManager(styles_file=parameters['css'])
+            resume_generator = ResumeGenerator()
+            with open(parameters['uploads']['plainTextResume'], "r", encoding='iso-8859-1') as file:
+                plain_text_resume = file.read()
+            resume_object = Resume(plain_text_resume)
+            #ToDo - replace hardcoded string with config parameter
+            resume_generator_manager = FacadeManager(openai_api_key, style_manager, resume_generator, resume_object,
+                                                     Path("data_folder/output"))
+            resume_generator_manager.choose_style()
+            job_application_profile_object = JobApplicationProfile(plain_text_resume)
+            login_component = LinkedInAuthenticator(browser)
+            apply_component = LinkedInJobManager(browser)
+            gpt_answerer_component = LLMResumeJobDescription(openai_api_key)
+            bot = LinkedInBotFacade(login_component, apply_component)
+            bot.set_secrets(email, password)
+            bot.set_job_application_profile_and_resume(job_application_profile_object, resume_object)
+            bot.set_gpt_answerer_and_resume_generator(gpt_answerer_component, resume_generator_manager)
+            bot.set_parameters(parameters)
+            return bot
+        except Exception as e:
+            print(f"Error while creating a bot. Error: {e} {traceback.format_exc()}")
+            raise e
 
     @property
     def jobs_folder(self):
@@ -200,7 +204,7 @@ class LinkedInBotFacade:
         if job is None: #check again if deserialization worked
             raise AttributeError(message = 'generate_resume_from_job() - job is None and unable to deserialize from path')
         if not is_valid_non_empty_string(path): path = job.path
-        if is_valid_non_empty_string(job.relevancy) and job.relevancy.lower != 'unk':
+        if job.relevancy:
             is_relevant = job.is_relevant
         else:
             is_relevant = self.apply_component.gpt_answerer.is_relevant_job(job)

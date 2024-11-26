@@ -157,6 +157,8 @@ class JobSearchElement:
         jd = self.rc.find_element(By.CLASS_NAME, 'jobs-description-content__text').find_element(By.CLASS_NAME, 'mt4')
         jd_text = jd.text
         #cleaning?
+        print (f"Job description is {len(jd_text.split(' '))} words for {self.job.title  if self.job else '-title-'} at {self.job.company  if self.job else '-co-'}. Job:{self.job.id if self.job else '-id-'}")
+
         return jd_text
 
     def set_job_insigts(self):
@@ -485,9 +487,9 @@ class LinkedInJobManager:
         try:
             job.company = self.driver.find_element(By.CLASS_NAME,
                                                                     "job-details-jobs-unified-top-card__company-name").text.strip()
-
         except Exception as e:
             pass
+
         try:
             job.title = self.driver.find_element(By.CLASS_NAME,"job-details-jobs-unified-top-card__job-title").text.strip()
         except Exception as e:
@@ -505,13 +507,18 @@ class LinkedInJobManager:
         except Exception as e:
             pass
         try:
-            use_text=True #for some reason I used html. It removes delimiters ('.', .\n\n' etc) the way it is implemented here.
-            if use_text:
+            use_html=False
+            #The reason we may want to use html is becuase when job description is hidden it is not being in the text field.
+            # It removes delimiters ('.', .\n\n' etc) the way it is implemented here.
+            # .get_attribute('innerText') or .get_attribute('textContent') can possibly solve it
+            # .get_attribute('innerText') returns the visible text that a user would see on the webpage after applying css.
+            # .get_attribute('textContent') returns  all text content, even if it's not visible to the user.
+            if not use_html:
                 elm_job_desc = find_element_with_wait(driver=self.driver, by=By.ID, value="job-details", post_sleep=(0,0.1))
                 if elm_job_desc:
-                    txt = elm_job_desc.text
-                    # Replace any remaining multiple "\n" with "\n\n"
-                    text = re.sub(r'\n{3,}', '\n\n', txt)
+                    txt = elm_job_desc.get_attribute('textContent')
+                    # Replace any remaining multiple "\n" or spaces wiht just \n"
+                    text = re.sub(r'(\s*\n\s*)+', '\n', txt).strip() #re.sub(r'\n{3,}', '\n\n', txt)
                     job.description = text
             else:
                 html = self.driver.find_element(By.ID, "job-details").get_attribute('innerHTML')
@@ -541,7 +548,7 @@ class LinkedInJobManager:
         except Exception as e:
             pass
         try:
-            job.skills = re.sub(r'\s+and\s+', ' ', skills).split(',')
+            job.skills = [x for x in re.sub(r'\s+and\s+', ' ', skills).split(',') if x]
         except Exception as e:
             pass
         try:
@@ -559,8 +566,8 @@ class LinkedInJobManager:
 
             job_insight_list = [x.text for x in elem_arr]
             #['$203K/yr - $317K/yr Hybrid Full-time Executive', '$203K/yr - $317K/yr', 'Hybrid', 'Full-time', 'Executive'
-            for x in job_insight_list[1:]:
-                if '$' in x:
+            for x in job_insight_list:
+                if '$' in x or "/yr" in x.lower():
                     job.salary = x
                 elif x.lower() in ['hybrid', 'remote','on-site'] :
                     job._office_policy = x

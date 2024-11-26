@@ -18,7 +18,7 @@ from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.by import By
 
 from src.global_config import GlobalConfigSingle
-from src.g_sheets import GSheets
+from src.g_data import GSheets
 from src.job import Job
 from src.utils import chromeBrowserOptions
 from src.utils import printc
@@ -34,7 +34,7 @@ from lib_resume_builder_AIHawk.html_resume import HtmlResume
 from lib_resume_builder_AIHawk.resume import Resume
 import context
 
-gc = GlobalConfigSingle()
+gc = GlobalConfigSingle.create()
 
 # Suppress stderr
 sys.stderr = open(os.devnull, 'w')
@@ -491,7 +491,7 @@ def create_resume_from_lkdn_id(lkdn, parameters):
             output_folder = r'C:\Users\al\PycharmProjects\linkedIn_auto_jobs_applier_with_AI\data_folder\output\Jobs\A_L' #parameters['outputFileDirectory']
             processed_ids = find_jobs_in_path(output_folder)
             gs = GSheets()
-            cols = gs.get('hawk', "B:C")
+            cols = gs.get(gc.get('sheet_name'), "B:C")
             for r in range(len(cols)):
                 id = cols[r][0]
                 if len(cols[r])>1: continue #it is an old data, filled in already
@@ -715,7 +715,7 @@ def search_lkdn(jobs, parameters):
 def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_template,
          lkdn, job_url, linkedin_id, job_file_desc, llm_cheap, llm, src_html, easy_apply, mode):
 
-
+#    gc = GlobalConfigSingle.create()
     start_time = datetime.datetime.now()
     printc.printcolor(f'Process started @ {start_time.strftime("%Y-%m-%d %H:%M:%S")}', "Blue")
 

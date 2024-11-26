@@ -10,6 +10,7 @@ from src.utils import printc
 from src.utils import EnvironmentKeys
 from src.utils import is_valid_non_empty_string, make_valid_os_path_string, make_valid_path, get_state_from_loc, get_id_from_linkedin_url, abbreviate_location
 from src.utils import custom_job_serializer, deserialize
+#from lib_resume_builder_AIHawk.small_models import JobRelevance
 import traceback
 @dataclass
 class DocSet:
@@ -79,6 +80,15 @@ class DocSet:
         self.path=path
         self._file_name=name
 
+from pydantic import BaseModel
+
+class JobRelevance(BaseModel):
+    title:str
+    relevant:bool
+    confidence:float
+    industry:str
+    family:str
+
 @dataclass
 class Job:
     id: str = ""
@@ -97,7 +107,7 @@ class Job:
     recruiter_link: str = ""
     resume_path: str = ''
     location: str = ''
-    relevancy: str='unk'
+    relevancy: str = 'unk'
     is_relevant_confidence: str='unk'
     industry: str = 'unk'
     family: str='unk'
@@ -302,18 +312,35 @@ class Job:
         return self._blacklisted
     @property
     def is_relevant_str(self):
-        if self.relevancy is None or self.relevancy=='unk': return 'relev_unk'
+        if not self.relevancy: return 'unk'
         return 'relevant' if self.is_relevant else 'not_relevant'
     @property
     def is_relevant(self) ->bool:
         if isinstance(self.relevancy, bool): return self.relevancy
+        if isinstance(self.relevancy, JobRelevance): return self.relevancy.relevant
         rel = False
         if self.relevancy is not None:
             rel = self.relevancy.lower() in ['y','yes', '1', 'on', 't','true']
         return rel
     @is_relevant.setter
     def is_relevant(self, value):
-        self.relevancy = value
+        if isinstance(value, JobRelevance):
+            self.relevancy = value
+        if isinstance(value, bool):
+            r = JobRelevance()
+            r.relevant = bool
+            self.relevancy = r
+        if isinstance(value, str):
+            r = JobRelevance()
+            if value.lower().strip() in  ['y','yes', '1', 'on', 't','true', 'n', 'no', '0', 'off','f','false']:
+                if value.lower().strip() in ['y','yes', '1', 'on', 't','true']:
+                    r.relevant = True
+                else:
+                    r.relevant = False
+
+                self.relevancy = r
+
+
     @property
     def abbreviated_position(self):
         if (self._abbreviated_position is None or len(self._abbreviated_position)==0):

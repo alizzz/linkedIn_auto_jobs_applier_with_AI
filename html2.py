@@ -1,83 +1,59 @@
 import os
+import re
 import click
 import datetime
 from src.utils import printc
 from lib_resume_builder_AIHawk.utils import HTML_to_PDF
-
-class Utils:
-    @staticmethod
-    def isdirfile(path)->(bool, bool):
-        if not os.path.exists(path):
-            return False, False
-        return os.path.isdir(path), os.path.isfile(path)
-
-    @staticmethod
-    def dirwalk(path, ext='.html'):
-        file_list = []
-        for root, _, files in os.walk(path):
-            for file in files:
-                if file.endswith(ext):
-                    file_list.append((root, file))
-
-        return file_list
+import requests
+from urllib.request import urlopen
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.support import expected_conditions as EC
+from dataclasses import dataclass
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.common.by import By
+from src.utils import chromeBrowserOptions
 
 
-@click.command()
-@click.option('--src', type=str, help="Source file or dir. Assumes html")
-@click.option('--recursive', '-r', is_Flag=True, help = 'Flag to run this directory and all subdirectories, if --src is a directory')
-#ToDo - not implemented
-@click.option('--dst', '-d', type=str, default=None, help="Run just conversion of html file to txt.")
-@click.option('--pdf', '-p', is_Flag=True, help="Run just conversion of html file to pdf.")
-@click.option('--txt', '-t', is_Flag=True, help="Run just conversion of html file to txt.")
-@click.option('--overwrite','-o', is_Flag=True, help="Run just conversion of html file to pdf.")
-def html2(src, dst, recursive, pdf, txt, overwrite):
-    start_time = datetime.datetime.now()
-    printc.printcolor(f'Process started @ {start_time.strftime("%Y-%m-%d %H:%M:%S")}', "Blue")
-    
-    dir = None
-    src_ = None
-    dst_ = None
+url = 'https://www.metacareers.com/jobs/3489873754638185/'
+
+
+def init_browser(options = None) -> webdriver.Chrome:
     try:
-        if os.path.isfile(src):
-            src_ = src
-            dst_ = src.rsplit(src,1)[0]
-        elif os.path.isdir(src):
-            html_files = []
-            # Loop through the files in the directory
-            for file in os.listdir(src):
-                if file.endswith(".html"):
-                    html_files.append(os.path.join(src, file.rsplit('.',1)[0]))
-
-            if len(html_files)==0:
-                printc.printred(f"There's no .html files in src directory {src}. Aborting")
-                exit(3)
-            if len(html_files)>1:
-                printc.printyellow(f"There's more than one html file in directory {src}. Using the first one {html_files[0]}. Other files are {html_files[1:]}")
-
-            src_ = os.path.join(src, html_files[0])
-            dst_ = os.path.join(src, html_files[0].rsplit('.',1)[0])
+        if options is None:
+            options = chromeBrowserOptions()
+        mgr = ChromeDriverManager().install()
+        service = ChromeService(mgr)
+        return webdriver.Chrome(service=service, options=options)
     except Exception as e:
-        printc.printred(f'src path should be string, os.PathLike. Received {src}. Error {e}')
-        exit(2)
+        raise RuntimeError(f"Failed to initialize browser: {str(e)}")
 
-    if dir:
-        k=0
-        list_files = Utils.dirwalk(src, recursive)
-        for dir, html_file in list_files:
-            pdf_file = os.path.join(dir, f'{html_file.rsplit('.',1)[0]}.pdf')
-            if not os.path.exists(pdf_file) or overwrite:
-                #html_2_pdf(resume_file = os.path.join(dir, html_file))
-                #html_2_txt(resume_file=os.path.join(dir, html_file), by = (By.TAG_NAME, 'body'))
-                print(f'{k}: Competed for {dir}')
-                k+=1
-        pass
-    else:
-        pass
-        #html_2_pdf(resume_file=html2pdf)
-        #html_2_txt(resume_file=html2pdf, by=(By.TAG_NAME, 'body'))
+# Open the URL and read the content
+# with urlopen(url) as response:
+#     content = re.sub(r'<[^>]+>', '', response.read().decode('utf-8'))
+#     print(content)  # Decode bytes to string
+#
 
-    end_time = datetime.datetime.now()
-    printc.printcolor(
-        f'Process finished @ {end_time.strftime("%Y-%m-%d %H:%M:%S")}. Execution time {end_time - start_time}',
-        "Blue")
-    return
+# response = requests.get(url)
+# if response.status_code==200:
+#     print(response.text)
+def wait_for_page_load(driver, timeout=10):
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script('return document.readyState') == 'complete'
+        )
+    except TimeoutException:
+        print("Page load timed out.")
+
+with init_browser() as browser:
+    browser.get(url)
+    wait_for_page_load(browser)
+
+    body = browser.find_element(By.TAG_NAME, "body")
+    print(body.text)
+    print('10')
+

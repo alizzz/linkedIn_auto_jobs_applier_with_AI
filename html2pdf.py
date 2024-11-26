@@ -3,8 +3,8 @@ import pdfkit
 import re
 import os
 
-from src.global_config import GlobalConfig
-gc = GlobalConfig.create('html2pdf.config')
+from src.global_config import GlobalConfigSingle
+gc = GlobalConfigSingle.create('html2pdf.config')
 
 #def html2pdf(html, pdf=None, css=None):
 
@@ -74,7 +74,7 @@ def html2pdf(html, pdf=None, css=None):
         pdfkit.from_file(html_file, pdf_, css=css)
 
 def create_argparser(default_config_path="default_config.yaml"):
-    parser = argparse.ArgumentParser(description="Global Config Parser")
+    parser = argparse.ArgumentParser(description="Global Config Parser", conflict_handler='resolve')
 
     # Explicitly specified arguments
     parser.add_argument("--config", type=str, default=default_config_path, help="Path to the YAML configuration file")
