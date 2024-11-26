@@ -109,7 +109,8 @@ class GlobalConfigSingle:
             with open(path, "r") as file:
                 self.config.update(yaml.safe_load(file))
         except Exception as e:
-            raise ValueError(f"Failed to load configuration from {path}: {e}")
+            print(f"Failed to load configuration from {path}: {e}")
+            #raise ValueError(f"Failed to load configuration from {path}: {e}")
 
     def merge_with_args(self, args):
         """Merge command-line arguments into the configuration."""
