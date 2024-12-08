@@ -1,3 +1,11 @@
+name: X_Y
+gfolder: ""
+gfolder_id: ""
+gfolder_data_id: ""
+spreadsheet_id: ''
+sheet_name: ''
+
+
 remote: false
 easy_apply: false
 experienceLevel:
