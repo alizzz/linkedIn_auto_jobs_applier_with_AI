@@ -162,7 +162,7 @@ def create_and_run_bot(email: str, password: str, parameters: dict, openai_api_k
             if job_desc[0]:
                 if job_desc[1]=='linkedin':
                     try:
-                        job_desc_id = job_desc[2].split('/')[-1]
+                        job_desc_id = os.path.basename(job_desc[2])
                         _file_name = f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}.{job_desc_id}.Resume'
                         pdf64 = bot.apply_component.resume_generator_manager.pdf_base64(job_description_url = job_desc[2], job_description_text = None,
                                                                     html_file_name=os.path.join(bot.jobs_folder, f'{_file_name}.html'), delete_html_file=False)
@@ -240,7 +240,7 @@ def validate_job_file_desc(job_file_desc):
 def html_2_pdf(resume_file, overwrite=False):
     try:
         dir, file = os.path.split(resume_file)
-        pdf_file = os.path.join(dir, f'{file.rsplit('.',1)[0]}.pdf')
+        pdf_file = os.path.join(dir, f'{file.rsplit(".",1)[0]}.pdf')
         if os.path.exists(pdf_file):
                 if not overwrite:
                     print(f'PDF file {pdf_file} exists and overwrite flag is {overwrite}. Skipping')
@@ -257,7 +257,7 @@ def html_2_pdf(resume_file, overwrite=False):
 def html_2_txt(resume_file, by=(None, None)):
     try:
         dir, file = os.path.split(resume_file)
-        txt_file = os.path.join(dir, f'{file.rsplit('.',1)[0]}.txt')
+        txt_file = os.path.join(dir, f'{file.rsplit(".",1)[0]}.txt')
         txt = HTML_to_PDF(resume_file, by=by)
         with open(txt_file, "w") as f:
             f.write(txt)
@@ -326,7 +326,7 @@ def convert_(clickParam:ClickParam ):
                 k = 0
                 list_files = dirwalk(src_html)
                 for dir, html_file in list_files:
-                    pdf_file = os.path.join(dir, f'{html_file.rsplit('.', 1)[0]}.pdf')
+                    pdf_file = os.path.join(dir, f'{html_file.rsplit(".", 1)[0]}.pdf')
                     if not os.path.exists(pdf_file) or overwrite:
                         html_2_pdf(resume_file=os.path.join(dir, html_file))
                         html_2_txt(resume_file=os.path.join(dir, html_file), by=(By.TAG_NAME, 'body'))
@@ -704,6 +704,7 @@ def search_lkdn(jobs, parameters):
 @click.option('--llm', type=str, default='gpt-4o', help="LLM model")
 @click.option('--src_html', type=str, default=None, help="Run just conversion of html file to pdf. --resume option is required")
 @click.option('--easy_apply', is_flag=True, help='If shall continue to fill in easy_apply')
+@click.option('--mode', type=click.Choice(['search_apply', 'convert', 'resume_lkdn', 'apply_txt', 'apply_url', 'search_lkdn', 'create_local']), default='search_apply', help='Mode of operation choose one of - search and apply(default), convert html to pdf and text, apply one that is provide')
 #mode -search_apply
 #mode -convert
 #mode -resume_lkdn
@@ -711,7 +712,6 @@ def search_lkdn(jobs, parameters):
 #mode -apply_url
 #mode -search_lkdn
 #mode -create_local
-@click.option('--mode', type=click.Choice(['search_apply', 'convert', 'resume_lkdn', 'apply_txt', 'apply_url', 'search_lkdn', 'create_local']), default='search_apply', help='Mode of operation choose one of - search and apply(default), convert html to pdf and text, apply one that is provide')
 def main(resume, plain, secret, config, jobs, data_folder, debug, css, resume_template,
          lkdn, job_url, linkedin_id, job_file_desc, llm_cheap, llm, src_html, easy_apply, mode):
 
@@ -861,7 +861,7 @@ def generate_html_resume( rfn_in = 'plain_text_resume_al_anc_hypc.yaml',
         html = hr.html()
         with open(rfn_out, 'w', encoding='utf-8') as f:
             f.write(html)
-        print(f'finished generating html resume from {rfn_in.split('\\')[-1]}')
+        print(f'finished generating html resume from {os.path.basename(rfn_in)}')
 
     except Exception as e:
         print(e)
